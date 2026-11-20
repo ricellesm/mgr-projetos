@@ -1,0 +1,1827 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MGR Projetos</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --ink: #1d2433; --muted: #6b7280; --line: #e5e7eb; --surface: #fff; --canvas: #f4f6fa;
+    --primary: #2a78d6; --primary-soft: #e8f1fc; --navy: #16213a;
+    --good: #0f8a4f; --good-soft: #e3f5ec; --warn: #b77700; --warn-soft: #fff4dc;
+    --bad: #c4314b; --bad-soft: #fde8ec; --series-1: #2a78d6; --series-2: #1baf7a; --pdf: #d63031;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); background: var(--canvas); font-size: 14px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  a { color: var(--primary); }
+  .app { display: flex; min-height: 100vh; }
+  nav.side { width: 220px; background: var(--navy); color: #cfd6e6; padding: 18px 12px; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; transition: width .15s; }
+  nav.side h1 { color: #fff; font-size: 17px; margin: 4px 8px 2px; white-space: nowrap; }
+  nav.side .sub { font-size: 12px; margin: 0 8px 22px; color: #8d97ad; white-space: nowrap; }
+  nav.side button { display: flex; gap: 10px; width: 100%; text-align: left; background: none; border: 0; color: inherit; padding: 10px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 2px; white-space: nowrap; }
+  nav.side button:hover { background: #22304f; }
+  nav.side button.active { background: var(--primary); color: #fff; font-weight: 600; }
+  nav.side .collapse { margin-top: 18px; color: #8d97ad; font-size: 12px; }
+  .app.compact nav.side { width: 64px; }
+  .app.compact nav.side h1, .app.compact nav.side .sub, .app.compact nav.side .lbl { display: none; }
+  main { flex: 1; padding: 24px 28px; min-width: 0; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .head h2 { margin: 0; font-size: 22px; }
+  .head .desc { color: var(--muted); margin-top: 4px; }
+  .head .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { border: 1px solid var(--line); background: var(--surface); padding: 8px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: #f3f4f6; }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+  .btn.primary:hover { background: #1f66bd; }
+  .btn.pdf { background: var(--pdf); border-color: var(--pdf); color: #fff; font-weight: 600; }
+  .btn.pdf:hover { background: #b92627; }
+  .btn.xls { background: #1d7a45; border-color: #1d7a45; color: #fff; font-weight: 600; }
+  .btn.orange { background: #e07b00; border-color: #e07b00; color: #fff; font-weight: 600; }
+  .btn.danger { color: var(--bad); }
+  .btn.sm { padding: 4px 9px; font-size: 12px; border-radius: 6px; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .link { background: none; border: 0; color: var(--primary); cursor: pointer; padding: 0; font-size: 13px; }
+  .link.red { color: var(--bad); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .grid { display: grid; gap: 14px; }
+  .kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 14px; }
+  .kpi .lbl { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi .val { font-size: 21px; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .kpi .note { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .kpi.center { text-align: center; }
+  .kpi.red { border-color: #f3b9c3; } .kpi.red .val { color: var(--bad); }
+  .two { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); margin-bottom: 14px; }
+  .card h3 { margin: 0 0 12px; font-size: 15px; }
+  .bars .row { display: grid; grid-template-columns: 170px 1fr 120px; gap: 10px; align-items: center; padding: 5px 0; }
+  .bars .name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bars .track { height: 14px; }
+  .bars .fill { height: 14px; background: var(--series-1); border-radius: 0 4px 4px 0; min-width: 2px; }
+  .bars .num { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .bars .num b { color: var(--ink); font-weight: 600; }
+  .bars .row:hover .fill { filter: brightness(.9); }
+  .vchart { display: flex; align-items: flex-end; gap: 10px; height: 220px; padding: 8px 4px 0; border-bottom: 1px solid #cfd4dc; overflow-x: auto; }
+  .vchart .col { flex: 1 0 48px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; position: relative; }
+  .vchart .stack { width: 70%; max-width: 46px; display: flex; flex-direction: column-reverse; gap: 2px; }
+  .vchart .seg { border-radius: 0; }
+  .vchart .seg:last-child { border-radius: 4px 4px 0 0; }
+  .vchart .col:hover .seg { filter: brightness(.9); }
+  .vchart .v { font-size: 11px; color: var(--muted); margin-bottom: 4px; white-space: nowrap; }
+  .vlabels { display: flex; gap: 10px; padding: 6px 4px 0; overflow-x: hidden; }
+  .vlabels span { flex: 1 0 48px; text-align: center; font-size: 11px; color: var(--muted); }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-bottom: 8px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .muted { color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; align-items: center; }
+  .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 13px; }
+  .chip.on { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .chip .c { opacity: .7; margin-left: 4px; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+  .filters input, .filters select, .fbox input, .fbox select { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; background: #fff; }
+  .filters input.search { min-width: 280px; flex: 1; }
+  .fbox { margin-bottom: 14px; }
+  .fbox .ft { font-size: 12px; font-weight: 700; color: #4b5563; text-transform: uppercase; letter-spacing: .04em; margin: 12px 0 8px; }
+  .fbox .ft:first-child { margin-top: 0; }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  .checks label { display: flex; gap: 6px; align-items: center; cursor: pointer; font-size: 14px; }
+  .seg-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .seg-btns button { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 16px; cursor: pointer; }
+  .seg-btns button.on { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 600; }
+  .tbl-wrap { overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  .tbl-wrap.tall { max-height: calc(100vh - 260px); }
+  .tbl-title { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); background: #fff; position: sticky; left: 0; }
+  .tbl-title h3 { margin: 0; font-size: 15px; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: #fafbfc; white-space: nowrap; position: sticky; top: 0; z-index: 1; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr:hover > td { background: #fafcff; }
+  tr.grp td { background: #eef3fb; font-weight: 700; }
+  tr.sub td { background: #f8fafc; font-weight: 600; color: #374151; }
+  tr.late td { background: #fff1f3; } tr.soon td { background: #fffbe6; }
+  tr.recv td { color: var(--muted); }
+  td .t { font-weight: 600; }
+  td .s { color: var(--muted); font-size: 12px; }
+  td .ob { color: #b45309; font-size: 12px; font-style: italic; }
+  .nowrap { white-space: nowrap; }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .badge.plain::before { display: none; }
+  .st-planejado { background: #eef0f4; color: #4b5563; }
+  .st-paralisado { background: var(--warn-soft); color: var(--warn); }
+  .st-em_execucao { background: var(--primary-soft); color: #1d5fae; }
+  .st-em_verificacao { background: #efeafd; color: #5641c4; }
+  .st-emitido_concluido { background: #e0f4f6; color: #0b7285; }
+  .st-medido_faturado { background: var(--good-soft); color: var(--good); }
+  .st-cancelado { background: var(--bad-soft); color: var(--bad); }
+  .pay-late { background: var(--bad-soft); color: var(--bad); } .pay-ok { background: var(--good-soft); color: var(--good); }
+  .pay-soon { background: var(--warn-soft); color: var(--warn); } .pay-pend { background: #eef0f4; color: #4b5563; }
+  .zero { color: var(--bad); font-weight: 600; }
+  .prog { width: 60px; height: 6px; background: #eceef2; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; }
+  .prog i { display: block; height: 6px; background: var(--primary); }
+  .actions { display: flex; gap: 4px; justify-content: flex-end; }
+  .sub-docs { background: #f9fafc; padding: 6px 10px 12px 34px !important; }
+  .sub-docs table th { background: #f1f4f8; position: static; }
+  .sub-docs table td { background: #fff; }
+  .sub-docs select, .cell-in { border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; background: #fff; font-size: 12px; }
+  .colpick { position: relative; }
+  .colpick .menu { position: absolute; right: 0; top: 38px; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 10px 14px; z-index: 20; min-width: 200px; }
+  .colpick .menu label { display: flex; gap: 8px; padding: 3px 0; font-size: 13px; cursor: pointer; }
+  /* modal */
+  .ov { position: fixed; inset: 0; background: rgba(15, 23, 42, .5); display: flex; align-items: flex-start; justify-content: center; padding: 24px 12px; overflow-y: auto; z-index: 50; }
+  .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 1280px; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+  .modal.full { max-width: 99vw; }
+  .modal.small { max-width: 480px; }
+  .modal .mh { display: flex; justify-content: space-between; align-items: center; padding: 14px 22px; border-bottom: 1px solid var(--line); gap: 8px; }
+  .modal .mh h3 { margin: 0; font-size: 17px; }
+  .modal .mb { padding: 18px 22px; }
+  .modal .mf { padding: 14px 22px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; position: sticky; bottom: 0; background: #fff; border-radius: 0 0 14px 14px; }
+  .sec { margin-bottom: 18px; }
+  .sec > h4 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+  .fg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .fg .span2 { grid-column: span 2; } .fg .span4 { grid-column: span 4; }
+  label.f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #4b5563; }
+  label.f input, label.f select, label.f textarea, .doc-tbl input, .doc-tbl select { border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font-weight: 400; background: #fff; width: 100%; font-size: 13px; }
+  .err { border-color: var(--bad) !important; }
+  .doc-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .doc-tbl { min-width: 1500px; }
+  .doc-tbl td, .doc-tbl th { padding: 5px 4px; }
+  .doc-tbl th { position: static; }
+  .doc-tbl tr:hover td { background: none; }
+  .total-box { display: flex; justify-content: flex-end; gap: 22px; font-size: 14px; }
+  .total-box b { color: var(--primary); font-size: 16px; }
+  .stages { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; }
+  .stages label { display: flex; gap: 8px; align-items: center; font-size: 13px; cursor: pointer; }
+  .info { background: var(--primary-soft); color: #1d4f8f; border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.6; }
+  .warn-box { background: var(--warn-soft); color: #7a4f00; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+  .toast { position: fixed; bottom: 22px; right: 22px; background: var(--navy); color: #fff; padding: 12px 18px; border-radius: 10px; z-index: 99; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+  .empty { text-align: center; padding: 34px; color: var(--muted); }
+  .backup-grid { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .backup-grid .card p { color: var(--muted); margin: 0 0 14px; line-height: 1.5; }
+  .backup-grid .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  /* mapa de carga */
+  .panel { background: #fff; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 14px; overflow: hidden; }
+  .panel > .ph { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; font-weight: 700; }
+  .panel.queue > .ph { background: #fff8e8; }
+  .panel.seq > .ph { background: #eef4fd; }
+  .stage-chk { display: inline-flex; gap: 6px; align-items: center; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; font-size: 12px; color: #4b5563; margin-top: 4px; cursor: pointer; background: #fff; }
+  .cad { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .gantt { overflow-x: auto; }
+  .gantt table { border-collapse: collapse; }
+  .gantt th, .gantt td { border-bottom: 1px solid var(--line); padding: 0; }
+  .gantt .lbl { min-width: 280px; max-width: 280px; padding: 8px 12px; position: sticky; left: 0; background: #fff; z-index: 2; border-right: 1px solid var(--line); }
+  .gantt th.lbl { background: #fafbfc; z-index: 3; }
+  .gantt .day { width: 34px; min-width: 34px; text-align: center; font-size: 10px; color: var(--muted); border-left: 1px solid #f0f1f4; }
+  .gantt .day.we { background: #f7f8fa; }
+  .gantt .day.today { background: #fff4dc; color: var(--warn); font-weight: 700; }
+  .gantt .mon { font-size: 11px; text-align: left; padding: 4px 6px; color: var(--ink); border-left: 1px solid #e3e6eb; }
+  .gantt td.track { position: relative; height: 54px; }
+  .gantt .bar { position: absolute; top: 14px; height: 26px; background: var(--series-1); color: #fff; border-radius: 5px; font-size: 12px; font-weight: 600; padding: 5px 8px; white-space: nowrap; overflow: hidden; }
+  .seqno { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--primary); color: #fff; font-weight: 700; font-size: 12px; margin-right: 8px; flex-shrink: 0; }
+  .reorder { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 16px; }
+  .reorder .it { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+  .reorder .it[draggable] { cursor: grab; }
+  .reorder .it.drag { opacity: .5; }
+  .reorder .grow { flex: 1; min-width: 0; }
+  /* login / sincronização */
+  #auth { position: fixed; inset: 0; background: linear-gradient(135deg, #16213a, #1f3b6e); display: none; align-items: center; justify-content: center; z-index: 200; padding: 16px; }
+  #auth.on { display: flex; }
+  #auth .box { background: #fff; border-radius: 16px; width: 100%; max-width: 400px; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+  #auth h1 { margin: 0 0 4px; font-size: 24px; }
+  #auth .sub { color: var(--muted); margin-bottom: 20px; }
+  #auth label.f { margin-bottom: 12px; }
+  #auth .btn { width: 100%; padding: 10px; margin-top: 4px; }
+  #auth .links { display: flex; justify-content: space-between; margin-top: 14px; }
+  #auth .msg { margin-top: 14px; font-size: 13px; line-height: 1.5; border-radius: 8px; padding: 10px 12px; display: none; }
+  #auth .msg.on { display: block; } #auth .msg.err { background: var(--bad-soft); color: var(--bad); } #auth .msg.ok { background: var(--good-soft); color: var(--good); }
+  .userbox { margin-top: 18px; padding: 12px; border-top: 1px solid #2a3756; font-size: 12px; color: #8d97ad; }
+  .userbox .em { color: #cfd6e6; word-break: break-all; margin-bottom: 6px; }
+  .userbox .sync { margin-bottom: 8px; } .userbox .sync.err { color: #ff9aa8; } .userbox .sync.ok { color: #7ee2b0; }
+  .userbox button { display: inline; width: auto; padding: 0; margin-right: 12px; color: #9fb4dc; font-size: 12px; }
+  .app.compact .userbox { display: none; }
+  @media (max-width: 860px) {
+    .app { flex-direction: column; } nav.side { width: 100% !important; height: auto; position: static; display: flex; flex-wrap: wrap; gap: 4px; }
+    nav.side h1, nav.side .sub, nav.side .collapse { display: none; } nav.side button { width: auto; }
+    main { padding: 16px; } .fg { grid-template-columns: 1fr 1fr; } .stages { grid-template-columns: 1fr; }
+    .bars .row { grid-template-columns: 110px 1fr 100px; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <nav class="side">
+    <h1>MGR Projetos</h1>
+    <div class="sub">Gestão de serviços externos</div>
+    <button data-tab="dashboard">📊<span class="lbl">Dashboard</span></button>
+    <button data-tab="servicos">🧾<span class="lbl">Serviços</span></button>
+    <button data-tab="mapa">🗂️<span class="lbl">Mapa de Carga</span></button>
+    <button data-tab="empresas">🏢<span class="lbl">Empresas</span></button>
+    <button data-tab="relatorios">📄<span class="lbl">Relatórios</span></button>
+    <button data-tab="recebimentos">📥<span class="lbl">Recebimentos</span></button>
+    <button data-tab="financeiro">💲<span class="lbl">Financeiro</span></button>
+    <button data-tab="backup">💾<span class="lbl">Backup</span></button>
+    <button class="collapse" id="btn-compact">⇔<span class="lbl">Recolher menu</span></button>
+    <div class="userbox"><div class="em" id="user-email"></div><div class="sync" id="sync-status"></div>
+      <button id="btn-pass">Alterar senha</button><button id="btn-logout">Sair</button></div>
+  </nav>
+  <main id="main"></main>
+</div>
+<div id="auth"><div class="box">
+  <h1>MGR Projetos</h1><div class="sub">Gestão de serviços externos — acesso restrito</div>
+  <label class="f">E-mail<input id="a-email" type="email" autocomplete="username"></label>
+  <label class="f">Senha<input id="a-pass" type="password" autocomplete="current-password"></label>
+  <button class="btn primary" id="a-login">Entrar</button>
+  <div class="links"><button class="link" id="a-signup">Primeiro acesso: criar senha</button></div>
+  <div class="msg" id="a-msg"></div>
+</div></div>
+<div id="modal-root"></div>
+
+<script>
+/* ============================ Constantes ============================ */
+const STORE_KEY = 'mgr_servicos_externos_v1';
+const PREV_KEY = 'mgr_servicos_externos_prev';
+const UI_KEY = 'mgr_servicos_externos_ui';
+const APP_NAME = 'MGR Projetos';
+const STATUS = [
+  { v: 'planejado', l: 'Planejado' },
+  { v: 'paralisado', l: 'Paralisado' },
+  { v: 'em_execucao', l: 'Em Execução' },
+  { v: 'em_verificacao', l: 'Em Verificação/Finalizado' },
+  { v: 'emitido_concluido', l: 'Emitido/Concluído' },
+  { v: 'medido_faturado', l: 'Medido/Faturado' },
+  { v: 'cancelado', l: 'Cancelado' },
+];
+const RANK = { planejado: 0, paralisado: 1, em_execucao: 2, em_verificacao: 3, emitido_concluido: 4, medido_faturado: 5, cancelado: 9 };
+const FLOW = ['planejado', 'em_execucao', 'em_verificacao', 'emitido_concluido', 'medido_faturado'];
+const DOC_TYPES = [
+  { v: 'A1_BASICO', l: 'A1 Básico', s: 'A1 Básico', field: 'a1_basico_value', unit: 'folha' },
+  { v: 'A1_DETALHADO', l: 'A1 Detalhado', s: 'A1 Det.', field: 'a1_detalhado_value', unit: 'folha' },
+  { v: 'HH_ENG', l: 'HH Engenheiro', s: 'HH Eng.', field: 'hh_eng_value', unit: 'h' },
+  { v: 'HH_PROJ', l: 'HH Projetista', s: 'HH Proj.', field: 'hh_projetista_value', unit: 'h' },
+];
+/** Disciplinas padrão — novas podem ser cadastradas na aba Empresas (ficam em state.disciplines). */
+const DEFAULT_DISCIPLINES = [{ code: 'ME', name: '' }, { code: 'MT', name: '' }, { code: 'EM', name: '' }];
+const cleanCode = v => String(v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+/** Prefixo do nº do documento: SE-<disciplina>-<nº projeto>-MC — o restante é completado pelo criador. */
+const docPrefix = s => `SE-${s.discipline || 'ME'}-${s.project_number || '0000-0000'}-MC`;
+/** Descobre a disciplina pelos documentos existentes (SE-XX-0000...). */
+function inferDiscipline(s) {
+  for (const d of s.documents || []) { const m = String(d.doc_number || '').match(/^SE-([A-Z0-9]{2,4})-\d/i); if (m) return m[1].toUpperCase(); }
+  return 'ME';
+}
+function normalizeDisciplines(list, services) {
+  const out = [];
+  const add = (code, name) => { const c = cleanCode(code); if (c.length >= 2 && !out.some(x => x.code === c)) out.push({ code: c, name: String(name || '').trim() }); };
+  (Array.isArray(list) && list.length ? list : DEFAULT_DISCIPLINES).forEach(x => typeof x === 'string' ? add(x) : add(x.code, x.name));
+  services.forEach(s => add(s.discipline));
+  return out;
+}
+const discLabel = d => d.name ? `${d.code} — ${d.name}` : d.code;
+const SUBSTATUS = [
+  { v: '', l: 'Nenhum' }, { v: 'faltando_titulo', l: 'Faltando título' }, { v: 'faltando_numero', l: 'Faltando número' },
+  { v: 'faltando_titulo_numero', l: 'Faltando título e nº' }, { v: 'a_99', l: 'A 99%' }, { v: 'revisao', l: 'Revisão pendente' },
+];
+const DEFAULT_STAGES = [
+  'Concepção Estrutural e Lançamento', 'Definição de Ações e Cargas', 'Modelagem e Análise Estrutural',
+  'Dimensionamento e Verificações (ELU e ELS)', 'Montagem do Memorial de Cálculo',
+  'Verificação do Memorial de Cálculo', 'Verificação | Título & Número',
+].map((name, i) => ({ id: i + 1, name, completed: false, subtasks: [] }));
+const SERVICE_COLS = [
+  { k: 'parent', l: 'Nota/OS/SERD', on: false }, { k: 'empresa', l: 'Empresa', on: true }, { k: 'docs', l: 'Docs', on: true },
+  { k: 'qtd', l: 'Qtd', on: true }, { k: 'valor', l: 'Valor', on: true }, { k: 'status', l: 'Status', on: true },
+  { k: 'inicio', l: 'Início', on: true }, { k: 'fim', l: 'Fim prev.', on: true }, { k: 'conclusao', l: 'Conclusão', on: true },
+  { k: 'medicao', l: 'Medição', on: false }, { k: 'pagto', l: 'Pagamento', on: false }, { k: 'avanco', l: 'Avanço', on: true },
+  { k: 'obs', l: 'Observações', on: false },
+];
+
+/* ============================ Utilidades ============================ */
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : 0; };
+const brl = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const fmtN = v => (v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+const pad = n => String(n).padStart(2, '0');
+const iso = (y, m, d) => { const dt = new Date(y, m, d); return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`; };
+const todayIso = () => { const t = new Date(); return iso(t.getFullYear(), t.getMonth(), t.getDate()); };
+const addDaysIso = (s, n) => { const [y, m, d] = s.split('-').map(Number); return iso(y, m - 1, d + n); };
+const daysBetween = (a, b) => Math.round((Date.UTC(...b.split('-').map((x, i) => i === 1 ? x - 1 : +x)) - Date.UTC(...a.split('-').map((x, i) => i === 1 ? x - 1 : +x))) / 86400000);
+const fmtD = s => s ? s.slice(0, 10).split('-').reverse().join('/') : '';
+const statusLabel = v => (STATUS.find(s => s.v === v) || { l: v }).l;
+const typeInfo = v => DOC_TYPES.find(t => t.v === v) || DOC_TYPES[2];
+const badge = st => `<span class="badge st-${esc(st)}">${esc(statusLabel(st))}</span>`;
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const monthLabel = ym => { const [y, m] = ym.split('-'); return `${MESES[+m - 1]}/${y.slice(2)}`; };
+const norm = s => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const statusOpts = sel => STATUS.map(x => `<option value="${x.v}" ${x.v === sel ? 'selected' : ''}>${x.l}</option>`).join('');
+
+/** Regra de medição: medição dia 25, NF até dia 5 do mês seguinte, pagamento dia 10 do mês subsequente. */
+function measurementCycle(measureIso) {
+  const [y, m] = measureIso.split('-').map(Number);
+  return { invoice: iso(y, m, 5), payment: iso(y, m + 1, 10) }; // m é 1-based → índice m = mês seguinte
+}
+/** Próxima medição (dia 25) a partir de uma data: até o dia 25 entra no mês; depois, no mês seguinte. */
+function nextMeasurement(baseIso) {
+  const [y, m, d] = baseIso.split('-').map(Number);
+  return d <= 25 ? iso(y, m - 1, 25) : iso(y, m, 25);
+}
+function defaultMeasurementDate() { const t = new Date(); return iso(t.getFullYear(), t.getMonth(), 25); }
+
+/* ============================ Estado ============================ */
+let state = load();
+const uiSaved = (() => { try { return JSON.parse(localStorage.getItem(UI_KEY) || '{}'); } catch { return {}; } })();
+let ui = {
+  tab: 'dashboard', status: new Set(), noValue: false, company: '', search: '', expanded: new Set(),
+  cols: uiSaved.cols || Object.fromEntries(SERVICE_COLS.map(c => [c.k, c.on])), compact: !!uiSaved.compact, colMenu: false,
+  rep: { type: 'geral', statuses: new Set(STATUS.filter(s => s.v !== 'cancelado').map(s => s.v)), dateField: 'completion_date', from: '', to: '', companies: new Set() },
+  rec: { statuses: new Set(['emitido_concluido', 'medido_faturado']), dateField: 'payment', from: '', to: '' },
+  fin: { month: 'all', period: 30 },
+  mapa: { search: '', view: 'gantt', from: '', to: '', statuses: new Set(['em_execucao']), types: new Set() },
+};
+function saveUi() { try { localStorage.setItem(UI_KEY, JSON.stringify({ cols: ui.cols, compact: ui.compact })); } catch { } }
+
+function emptyState() { return { version: '4.1', companies: [], services: [], disciplines: structuredClone(DEFAULT_DISCIPLINES) }; }
+function load() {
+  try { const raw = localStorage.getItem(STORE_KEY); if (raw) return normalizeState(JSON.parse(raw)); } catch (e) { console.error(e); }
+  return emptyState();
+}
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { console.error(e); }
+  scheduleSync();
+}
+
+/* ============================ Acesso online (Supabase) ============================ */
+const SUPABASE_URL = 'https://vpuukqebcthexivadplp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable__VHZl0llV_qWVx0CIkwp6Q_E65gRsvT'; // chave pública; o acesso é protegido por RLS no banco
+const ALLOWED_EMAILS = ['ricelles@idg.global', 'ricellesmartins@gmail.com']; // conferência rápida na tela; a regra real está no banco
+const sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } }) : null;
+const sync = { version: 0, timer: null, busy: false, dirty: false, online: false };
+function setSync(txt, cls) { const el = document.getElementById('sync-status'); if (el) { el.textContent = txt; el.className = 'sync ' + (cls || ''); } }
+function scheduleSync() {
+  if (!sync.online) return;
+  sync.dirty = true; setSync('● Alterações pendentes…');
+  clearTimeout(sync.timer); sync.timer = setTimeout(pushState, 800);
+}
+async function pushState() {
+  if (!sync.online) return;
+  if (sync.busy) { sync.timer = setTimeout(pushState, 500); return; }
+  sync.busy = true; sync.dirty = false; setSync('⟳ Salvando…');
+  try {
+    const next = sync.version + 1;
+    const { data, error } = await sb.from('app_state').update({ data: state, version: next }).eq('id', 'main').eq('version', sync.version).select('version');
+    if (error) throw error;
+    if (!data.length) {
+      // outra pessoa salvou antes: recarrega a versão do servidor
+      await pullState(true);
+      alert('Os dados foram alterados em outro acesso enquanto você editava. A versão mais recente foi carregada — confira e refaça sua última alteração, se necessário.');
+    } else { sync.version = next; setSync('☁ Salvo online ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), 'ok'); }
+  } catch (e) {
+    console.error(e); sync.dirty = true; setSync('⚠ Erro ao salvar online — tentando de novo', 'err');
+    clearTimeout(sync.timer); sync.timer = setTimeout(pushState, 10000);
+  } finally { sync.busy = false; }
+  if (sync.dirty && !sync.timer) sync.timer = setTimeout(pushState, 800);
+}
+async function pullState(force) {
+  const { data, error } = await sb.from('app_state').select('data,version').eq('id', 'main').maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  if (force || data.version !== sync.version) {
+    sync.version = data.version;
+    if (data.data && Array.isArray(data.data.services)) {
+      state = normalizeState(data.data);
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch { }
+      if (!document.querySelector('#modal-root .ov')) render();
+    }
+  }
+  setSync('☁ Sincronizado', 'ok');
+  return data;
+}
+function authMsg(txt, kind) { const m = document.getElementById('a-msg'); m.innerHTML = txt; m.className = 'msg on ' + (kind || 'err'); }
+function showLogin(msg, kind) {
+  sync.online = false;
+  document.getElementById('auth').classList.add('on');
+  document.getElementById('main').innerHTML = '';
+  if (msg) authMsg(msg, kind); else document.getElementById('a-msg').className = 'msg';
+}
+async function enterApp(session) {
+  const email = (session.user.email || '').toLowerCase();
+  let row;
+  try {
+    const { data, error } = await sb.from('app_state').select('data,version').eq('id', 'main').maybeSingle();
+    if (error) throw error;
+    row = data;
+  } catch (e) { return showLogin('Erro ao conectar: ' + esc(e.message)); }
+  if (!row) { await sb.auth.signOut(); return showLogin(`O e-mail <b>${esc(email)}</b> não tem acesso ao MGR Projetos.`); }
+  sync.version = row.version; sync.online = true;
+  document.getElementById('user-email').textContent = email;
+  document.getElementById('auth').classList.remove('on');
+  const remoteEmpty = !row.data || !Array.isArray(row.data.services);
+  if (remoteEmpty) {
+    const local = load();
+    const hasLocal = local.services.length || local.companies.length;
+    state = hasLocal && confirm(`Primeiro acesso online: enviar os dados deste navegador (${local.companies.length} empresas, ${local.services.length} serviços) para o MGR Projetos online?\n\nSe preferir, cancele e use Backup → Importar.`) ? local : emptyState();
+    render(); await pushState();
+  } else {
+    state = normalizeState(row.data);
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch { }
+    setSync('☁ Sincronizado', 'ok'); render();
+  }
+}
+async function boot() {
+  if (!sb) { showLogin('Não foi possível carregar o serviço de acesso online (verifique a internet e recarregue a página).'); return; }
+  const $ = id => document.getElementById(id);
+  const creds = () => ({ email: $('a-email').value.trim().toLowerCase(), password: $('a-pass').value });
+  const busy = on => ['a-login', 'a-signup'].forEach(id => $(id).disabled = on);
+  $('a-login').onclick = async () => {
+    const { email, password } = creds();
+    if (!email || !password) return authMsg('Informe e-mail e senha.');
+    busy(true);
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    busy(false);
+    if (error) return authMsg(/confirm/i.test(error.message) ? 'E-mail ainda não confirmado. Abra o e-mail de confirmação e clique no link.' : 'E-mail ou senha inválidos.');
+    enterApp(data.session);
+  };
+  $('a-pass').onkeydown = e => { if (e.key === 'Enter') $('a-login').click(); };
+  $('a-signup').onclick = async () => {
+    const { email, password } = creds();
+    if (!ALLOWED_EMAILS.includes(email)) return authMsg('Este e-mail não está autorizado a acessar o MGR Projetos.');
+    if (password.length < 8) return authMsg('Digite no campo Senha a senha que deseja criar (mínimo 8 caracteres) e clique de novo em “Primeiro acesso”.');
+    busy(true);
+    const { data, error } = await sb.auth.signUp({ email, password, options: location.protocol.startsWith('http') ? { emailRedirectTo: location.href.split('#')[0] } : {} });
+    busy(false);
+    if (error) return authMsg(/already/i.test(error.message) ? 'Este e-mail já tem acesso criado. Use “Entrar”.' : 'Erro: ' + esc(error.message));
+    if (data.session) return enterApp(data.session);
+    authMsg(`Acesso criado para <b>${esc(email)}</b>. Enviamos um e-mail de confirmação — clique no link recebido e depois volte aqui e clique em “Entrar”.`, 'ok');
+  };
+  $('btn-logout').onclick = async () => { if (sync.dirty) await pushState(); await sb.auth.signOut(); showLogin('Você saiu do sistema.', 'ok'); };
+  $('btn-pass').onclick = async () => {
+    const p = prompt('Nova senha (mínimo 8 caracteres):'); if (p === null) return;
+    if (p.length < 8) return alert('A senha precisa ter ao menos 8 caracteres.');
+    const { error } = await sb.auth.updateUser({ password: p });
+    alert(error ? 'Erro: ' + error.message : 'Senha alterada.');
+  };
+  window.addEventListener('focus', () => { if (sync.online && !sync.dirty && !sync.busy) pullState().catch(console.error); });
+  window.addEventListener('beforeunload', e => { if (sync.dirty || sync.busy) { e.preventDefault(); e.returnValue = ''; } });
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) enterApp(session); else showLogin();
+}
+
+function normalizeCompany(c) {
+  return {
+    id: c.id || uid(), name: String(c.name || '').trim(), active: c.active !== false,
+    a1_basico_value: num(c.a1_basico_value), a1_detalhado_value: num(c.a1_detalhado_value),
+    hh_eng_value: num(c.hh_eng_value), hh_projetista_value: num(c.hh_projetista_value),
+    created_date: c.created_date || new Date().toISOString(), updated_date: c.updated_date || new Date().toISOString(),
+  };
+}
+function normalizeDoc(d, s) {
+  // Migração: backups antigos tinham o status/datas de medição no serviço
+  let status = STATUS.some(x => x.v === d.status) ? d.status : null;
+  if (!status) status = d.measured ? 'medido_faturado' : (STATUS.some(x => x.v === s.status) ? s.status : 'planejado');
+  const doc = {
+    id: d.id || uid(), doc_number: String(d.doc_number || '').trim(), note: String(d.note ?? d.doc_note ?? '').trim(),
+    type: DOC_TYPES.some(t => t.v === d.type) ? d.type : 'HH_ENG', quantity: num(d.quantity), status,
+    completion_date: d.completion_date || '', measurement_date: d.measurement_date || '',
+    invoice_date: d.invoice_date || '', payment_date: d.payment_date || '',
+    received: !!d.received, received_date: d.received_date || '',
+    exec_start: d.exec_start || '', exec_end: d.exec_end || '',
+    priority: d.priority == null || d.priority === '' ? null : num(d.priority), substatus: d.substatus || '',
+  };
+  if (status === 'medido_faturado') {
+    if (!doc.measurement_date) doc.measurement_date = s.measurement_date || '';
+    if (!doc.invoice_date) doc.invoice_date = s.invoice_date || '';
+    if (!doc.payment_date) doc.payment_date = s.payment_date || '';
+    if (doc.measurement_date) {
+      const cyc = measurementCycle(doc.measurement_date);
+      if (!doc.invoice_date) doc.invoice_date = cyc.invoice;
+      if (!doc.payment_date) doc.payment_date = cyc.payment;
+    }
+  }
+  doc.measured = status === 'medido_faturado';
+  return doc;
+}
+function normalizeService(s) {
+  const svc = {
+    id: s.id || uid(), project_number: String(s.project_number || '').trim(), parent_project: String(s.parent_project || '').trim(),
+    title: String(s.title || '').trim(), company_id: s.company_id || '', company_name: s.company_name || '',
+    discipline: cleanCode(s.discipline).length >= 2 ? cleanCode(s.discipline) : inferDiscipline(s),
+    start_date: s.start_date || '', completion_date: s.completion_date || '', concluded_date: s.concluded_date || '',
+    progress_percentage: Math.max(0, Math.min(100, num(s.progress_percentage))), notes: s.notes || '',
+    stages: Array.isArray(s.stages) && s.stages.length ? s.stages : structuredClone(DEFAULT_STAGES),
+    created_date: s.created_date || new Date().toISOString(), updated_date: s.updated_date || new Date().toISOString(),
+  };
+  svc.documents = (s.documents || []).map(d => normalizeDoc(d, s));
+  if (!svc.concluded_date && ['emitido_concluido', 'medido_faturado'].includes(serviceStatus(svc))) {
+    const ds = svc.documents.map(d => d.completion_date).filter(Boolean).sort();
+    if (ds.length) svc.concluded_date = ds[ds.length - 1];
+  }
+  return svc;
+}
+function normalizeState(d) {
+  const companies = (d.companies || []).map(normalizeCompany);
+  const services = (d.services || []).map(normalizeService);
+  services.forEach(s => {
+    let c = companies.find(c => c.id === s.company_id);
+    if (!c && s.company_name) c = companies.find(c => norm(c.name) === norm(s.company_name));
+    if (c) { s.company_id = c.id; s.company_name = c.name; }
+  });
+  return { version: '4.1', companies, services, disciplines: normalizeDisciplines(d.disciplines, services) };
+}
+
+/* ============================ Cálculos ============================ */
+const companyOf = s => state.companies.find(c => c.id === s.company_id);
+function unitValue(company, type) { return company ? num(company[typeInfo(type).field]) : 0; }
+function docValue(s, d) { return num(d.quantity) * unitValue(companyOf(s), d.type); }
+function serviceValue(s) { return s.documents.reduce((a, d) => a + docValue(s, d), 0); }
+function serviceQty(s, type) { return s.documents.filter(d => !type || d.type === type).reduce((a, d) => a + num(d.quantity), 0); }
+/** Status resumido do serviço = documento menos avançado (ignorando cancelados). */
+function serviceStatus(s) {
+  const ds = s.documents.filter(d => d.status !== 'cancelado');
+  if (!s.documents.length) return 'planejado';
+  if (!ds.length) return 'cancelado';
+  return ds.reduce((a, d) => RANK[d.status] < RANK[a] ? d.status : a, 'medido_faturado');
+}
+function allDocs() { return state.services.flatMap(s => s.documents.map(d => ({ s, d, value: docValue(s, d) }))); }
+/** Data de pagamento salva ou estimada pelo ciclo (emitido: próxima medição a partir da conclusão). */
+function paymentInfo(s, d) {
+  if (d.payment_date) return { date: d.payment_date, est: false, ref: d.measurement_date };
+  if (d.status === 'medido_faturado' && d.measurement_date) return { date: measurementCycle(d.measurement_date).payment, est: true, ref: d.measurement_date };
+  if (d.status === 'emitido_concluido') {
+    const base = d.completion_date || s.concluded_date || todayIso();
+    const meas = nextMeasurement(base);
+    return { date: measurementCycle(meas).payment, est: true, ref: base, meas };
+  }
+  return { date: '', est: true, ref: '' };
+}
+function payState(d, date) {
+  if (d.received) return { k: 'ok', l: 'Recebido' };
+  if (!date) return { k: 'pend', l: '—' };
+  const diff = daysBetween(todayIso(), date);
+  if (diff < 0) return { k: 'late', l: 'Atrasado' };
+  if (diff <= 30) return { k: 'soon', l: `Vence em ${diff}d` };
+  return { k: 'pend', l: 'Pendente' };
+}
+function nextStage(s) { return s.stages.find(st => !st.completed); }
+
+/* ============================ Navegação ============================ */
+document.querySelectorAll('nav.side button[data-tab]').forEach(b => b.onclick = () => { ui.tab = b.dataset.tab; ui.colMenu = false; render(); window.scrollTo(0, 0); });
+document.getElementById('btn-compact').onclick = () => { ui.compact = !ui.compact; saveUi(); render(); };
+const VIEWS = {};
+function render() {
+  document.getElementById('app').classList.toggle('compact', ui.compact);
+  document.querySelectorAll('nav.side button[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === ui.tab));
+  const m = document.getElementById('main');
+  const y = window.scrollY;
+  m.innerHTML = VIEWS[ui.tab]();
+  bindView();
+  window.scrollTo(0, y);
+}
+function toast(msg) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+function touch(s) { s.updated_date = new Date().toISOString(); }
+
+/* ============================ Dashboard ============================ */
+function barRows(items, valueFmt) {
+  const max = Math.max(...items.map(i => i.value), 0) || 1;
+  return `<div class="bars">${items.map(i => `
+    <div class="row" title="${esc(i.name)}: ${esc(valueFmt(i.value))}${i.extra ? ' · ' + esc(i.extra) : ''}">
+      <div class="name">${i.label || esc(i.name)}</div>
+      <div class="track"><div class="fill" style="width:${(i.value / max * 100).toFixed(1)}%"></div></div>
+      <div class="num"><b>${esc(valueFmt(i.value))}</b>${i.extra ? `<br>${esc(i.extra)}` : ''}</div>
+    </div>`).join('')}</div>`;
+}
+VIEWS.dashboard = function () {
+  const D = allDocs(), act = D.filter(x => x.d.status !== 'cancelado');
+  const sum = arr => arr.reduce((a, x) => a + x.value, 0);
+  const by = st => act.filter(x => x.d.status === st);
+  const today = todayIso();
+  const total = sum(act), medido = sum(by('medido_faturado')), aMedir = sum(by('emitido_concluido'));
+  const andamento = sum(act.filter(x => RANK[x.d.status] <= 3));
+  const semValor = state.services.filter(s => serviceStatus(s) !== 'cancelado' && serviceValue(s) === 0).length;
+  const aReceber = by('medido_faturado').filter(x => !x.d.received);
+  const statusItems = STATUS.map(st => { const l = D.filter(x => x.d.status === st.v); return { name: st.l, label: badge(st.v), value: sum(l), extra: `${l.length} doc(s)` }; });
+  const compMap = {};
+  act.forEach(x => { const k = x.s.company_name || '(sem empresa)'; compMap[k] = compMap[k] || { name: k, value: 0, n: 0 }; compMap[k].value += x.value; compMap[k].n++; });
+  const compItems = Object.values(compMap).sort((a, b) => b.value - a.value).map(c => ({ ...c, extra: `${c.n} doc(s)` }));
+  const hhItems = DOC_TYPES.map(t => ({ name: t.l, value: act.filter(x => x.d.type === t.v).reduce((a, x) => a + num(x.d.quantity), 0), extra: t.unit === 'h' ? 'horas' : 'folhas' }));
+  const cyc = measurementCycle(defaultMeasurementDate());
+  const late = state.services.filter(s => s.completion_date && s.completion_date < today && RANK[serviceStatus(s)] <= 3);
+  return `
+  <div class="head"><div><h2>Dashboard geral</h2><div class="desc">Visão consolidada por documento</div></div><button class="btn primary" data-act="new-service">+ Novo serviço</button></div>
+  <div class="grid kpis">
+    <div class="card kpi"><div class="lbl">Carteira total</div><div class="val">${brl(total)}</div><div class="note">${act.length} documentos (exceto cancelados)</div></div>
+    <div class="card kpi"><div class="lbl">Medido / Faturado</div><div class="val">${brl(medido)}</div><div class="note">${by('medido_faturado').length} documentos</div></div>
+    <div class="card kpi"><div class="lbl">A medir (emitido)</div><div class="val">${brl(aMedir)}</div><div class="note">${by('emitido_concluido').length} documentos prontos</div></div>
+    <div class="card kpi"><div class="lbl">Em andamento</div><div class="val">${brl(andamento)}</div><div class="note">planejado → verificação</div></div>
+    <div class="card kpi"><div class="lbl">A receber</div><div class="val">${brl(sum(aReceber))}</div><div class="note">medidos ainda não recebidos</div></div>
+    <div class="card kpi"><div class="lbl">Serviços sem valor</div><div class="val ${semValor ? 'zero' : ''}">${semValor}</div><div class="note"><a href="#" data-act="go-novalue">ver lista</a></div></div>
+  </div>
+  <div class="grid two">
+    <div class="card"><h3>Valor por status (documentos)</h3>${barRows(statusItems, brl)}</div>
+    <div class="card"><h3>Valor por empresa</h3>${compItems.length ? barRows(compItems, brl) : '<div class="empty">Sem dados</div>'}</div>
+  </div>
+  <div class="grid two">
+    <div class="card"><h3>Quantidades por item</h3>${barRows(hhItems, fmtN)}
+      <div class="info" style="margin-top:14px"><b>Próximo ciclo:</b> medição ${fmtD(defaultMeasurementDate())} · NF até ${fmtD(cyc.invoice)} · pagamento ${fmtD(cyc.payment)}</div></div>
+    <div class="card"><h3>Prazos vencidos (${late.length})</h3>
+      ${late.length ? `<table><thead><tr><th>Projeto</th><th>Fim previsto</th><th>Status</th><th class="num">Valor</th></tr></thead><tbody>
+        ${late.sort((a, b) => a.completion_date.localeCompare(b.completion_date)).slice(0, 12).map(s => `<tr data-edit="${s.id}" style="cursor:pointer"><td><div class="t">${esc(s.project_number)}</div><div class="s">${esc(s.company_name)} · ${esc(s.title)}</div></td><td class="nowrap">${fmtD(s.completion_date)}</td><td>${badge(serviceStatus(s))}</td><td class="num">${brl(serviceValue(s))}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="muted">Nenhum serviço com prazo vencido.</div>'}
+    </div>
+  </div>`;
+};
+
+/* ============================ Serviços ============================ */
+function filteredServices() {
+  const q = norm(ui.search);
+  return state.services.filter(s => {
+    if (ui.status.size && !s.documents.some(d => ui.status.has(d.status)) && !(s.documents.length === 0 && ui.status.has('planejado'))) return false;
+    if (ui.noValue && serviceValue(s) !== 0) return false;
+    if (ui.company && s.company_id !== ui.company) return false;
+    if (q) {
+      const hay = norm([s.project_number, s.parent_project, s.title, s.company_name, s.notes, ...s.documents.map(d => d.doc_number + ' ' + d.note)].join(' '));
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort((a, b) => (b.start_date || b.created_date || '').localeCompare(a.start_date || a.created_date || ''));
+}
+function statusSummary(s) {
+  const c = {}; s.documents.forEach(d => c[d.status] = (c[d.status] || 0) + 1);
+  const keys = Object.keys(c).sort((a, b) => RANK[a] - RANK[b]);
+  if (keys.length <= 1) return badge(keys[0] || 'planejado');
+  return keys.map(k => `<span class="badge st-${k}" title="${esc(statusLabel(k))}">${c[k]} ${esc(statusLabel(k).split('/')[0])}</span>`).join(' ');
+}
+VIEWS.servicos = function () {
+  const list = filteredServices();
+  const total = list.reduce((a, s) => a + serviceValue(s), 0);
+  const cnt = st => state.services.filter(s => s.documents.some(d => d.status === st)).length;
+  const noValCnt = state.services.filter(s => serviceValue(s) === 0).length;
+  const C = ui.cols, visible = SERVICE_COLS.filter(c => C[c.k]);
+  return `
+  <div class="head"><div><h2>Serviços</h2><div class="desc">Status controlado por documento — clique em ▸ para ver os documentos</div></div>
+    <div class="btns">
+      <div class="colpick"><button class="btn" data-act="colmenu">☰ Colunas</button>
+        ${ui.colMenu ? `<div class="menu">${SERVICE_COLS.map(c => `<label><input type="checkbox" data-col="${c.k}" ${C[c.k] ? 'checked' : ''}> ${c.l}</label>`).join('')}
+        <div style="margin-top:6px;display:flex;gap:10px"><button class="link" data-act="cols-all">Todas</button><button class="link" data-act="cols-def">Padrão</button></div></div>` : ''}
+      </div>
+      <button class="btn" data-act="expand-all">${ui.expanded.size ? '▾ Recolher' : '▸ Expandir'} todos</button>
+      <button class="btn primary" data-act="new-service">+ Novo serviço</button></div></div>
+  <div class="chips">
+    <button class="chip ${!ui.status.size && !ui.noValue ? 'on' : ''}" data-chip="all">Todos<span class="c">${state.services.length}</span></button>
+    ${STATUS.map(s => `<button class="chip ${ui.status.has(s.v) ? 'on' : ''}" data-chip="${s.v}">${s.l}<span class="c">${cnt(s.v)}</span></button>`).join('')}
+    <button class="chip ${ui.noValue ? 'on' : ''}" data-chip="novalue">⚠ Sem valor<span class="c">${noValCnt}</span></button>
+  </div>
+  <div class="filters">
+    <input class="search" id="f-search" placeholder="Buscar nº projeto, título, documento, observação, nota/OS..." value="${esc(ui.search)}">
+    <select id="f-company"><option value="">Todas as empresas</option>${state.companies.map(c => `<option value="${c.id}" ${ui.company === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+    <span class="muted">${list.length} serviço(s) · <b style="color:var(--ink)">${brl(total)}</b></span>
+  </div>
+  <div class="tbl-wrap tall"><table>
+    <thead><tr><th style="width:26px"></th><th>Projeto / Título</th>${visible.map(c => `<th class="${['qtd', 'valor'].includes(c.k) ? 'num' : ''}">${c.l}</th>`).join('')}<th></th></tr></thead>
+    <tbody>${list.length ? list.map(s => rowService(s, visible)).join('') : `<tr><td colspan="${visible.length + 3}" class="empty">Nenhum serviço encontrado</td></tr>`}</tbody>
+  </table></div>`;
+};
+function rowService(s, visible) {
+  const v = serviceValue(s), open = ui.expanded.has(s.id);
+  const meas = s.documents.map(d => d.measurement_date).filter(Boolean).sort();
+  const pays = s.documents.map(d => d.payment_date).filter(Boolean).sort();
+  const cell = {
+    parent: () => `<td>${esc(s.parent_project)}</td>`,
+    empresa: () => `<td>${esc(s.company_name) || '<span class="zero">sem empresa</span>'}</td>`,
+    docs: () => `<td class="nowrap">${s.documents.length} <span class="s">${esc([...new Set(s.documents.map(d => typeInfo(d.type).s))].join(', '))}</span></td>`,
+    qtd: () => `<td class="num">${fmtN(serviceQty(s))}</td>`,
+    valor: () => `<td class="num ${v === 0 ? 'zero' : ''}">${brl(v)}</td>`,
+    status: () => `<td style="max-width:280px">${statusSummary(s)}</td>`,
+    inicio: () => `<td class="nowrap">${fmtD(s.start_date)}</td>`, fim: () => `<td class="nowrap">${fmtD(s.completion_date)}</td>`,
+    conclusao: () => `<td class="nowrap">${fmtD(s.concluded_date)}</td>`,
+    medicao: () => `<td class="nowrap">${fmtD(meas.at(-1))}</td>`, pagto: () => `<td class="nowrap">${fmtD(pays.at(-1))}</td>`,
+    avanco: () => `<td class="nowrap"><span class="prog"><i style="width:${s.progress_percentage}%"></i></span> <span class="s">${s.progress_percentage}%</span></td>`,
+    obs: () => `<td><div class="s" style="max-width:260px">${esc(s.notes)}</div></td>`,
+  };
+  return `<tr>
+    <td><button class="link" data-toggle="${s.id}" style="font-size:15px">${open ? '▾' : '▸'}</button></td>
+    <td style="min-width:240px"><div class="t">${esc(s.project_number) || '—'}</div><div class="s">${esc(s.title)}</div></td>
+    ${visible.map(c => cell[c.k]()).join('')}
+    <td><div class="actions">
+      <button class="btn sm" data-edit="${s.id}">Editar</button>
+      <button class="btn sm" data-dup="${s.id}" title="Duplicar">⧉</button>
+      <button class="btn sm danger" data-del="${s.id}" title="Excluir">✕</button>
+    </div></td>
+  </tr>${open ? `<tr><td colspan="${visible.length + 3}" class="sub-docs">${docsSubTable(s)}</td></tr>` : ''}`;
+}
+function docsSubTable(s) {
+  if (!s.documents.length) return '<div class="muted">Sem documentos. <button class="link" data-edit="' + s.id + '">Adicionar</button></div>';
+  const emit = s.documents.filter(d => d.status === 'emitido_concluido');
+  return `<table><thead><tr><th>Documento</th><th>Observação</th><th>Item</th><th class="num">Qtd</th><th class="num">Valor</th><th>Status</th><th>Conclusão</th><th>Medição</th><th>NF</th><th>Pagamento</th><th>Recebido</th><th></th></tr></thead><tbody>
+    ${s.documents.map(d => {
+      const next = FLOW.includes(d.status) && d.status !== 'medido_faturado' ? FLOW[FLOW.indexOf(d.status) + 1] : null;
+      return `<tr><td class="t nowrap">${esc(d.doc_number) || '—'}</td><td><span class="ob">${esc(d.note)}</span></td><td class="nowrap">${typeInfo(d.type).s}</td>
+      <td class="num">${fmtN(d.quantity)}</td><td class="num ${docValue(s, d) === 0 ? 'zero' : ''}">${brl(docValue(s, d))}</td>
+      <td><select data-dstatus="${s.id}|${d.id}">${statusOpts(d.status)}</select></td>
+      <td class="nowrap">${fmtD(d.completion_date)}</td><td class="nowrap">${fmtD(d.measurement_date)}</td><td class="nowrap">${fmtD(d.invoice_date)}</td><td class="nowrap">${fmtD(d.payment_date)}</td>
+      <td class="nowrap">${d.received ? `✔ ${fmtD(d.received_date)}` : ''}</td>
+      <td>${next ? `<button class="btn sm" data-dadv="${s.id}|${d.id}" title="Avançar status">▶ ${esc(statusLabel(next).split('/')[0])}</button>` : ''}</td></tr>`;
+    }).join('')}</tbody></table>
+    ${emit.length > 1 ? `<div style="margin-top:8px"><button class="btn sm primary" data-measall="${s.id}">Medir ${emit.length} documentos emitidos</button></div>` : ''}`;
+}
+/** Muda status de um documento salvo (tabela, mapa de carga). */
+function setDocStatus(s, d, st, after) {
+  if (st === 'medido_faturado') {
+    askMeasurement([{ s, d }], ok => { if (ok) { touch(s); save(); toast('Documento medido/faturado'); } (after || render)(); });
+    return;
+  }
+  applyStatus(s, d, st); touch(s); save(); (after || render)();
+}
+function applyStatus(s, d, st) {
+  d.status = st; d.measured = st === 'medido_faturado';
+  if (st !== 'medido_faturado') { d.measurement_date = ''; d.invoice_date = ''; d.payment_date = ''; d.received = false; d.received_date = ''; }
+  if (st === 'emitido_concluido' && !d.completion_date) d.completion_date = todayIso();
+  if (st === 'em_execucao' && !s.start_date) s.start_date = todayIso();
+  rollup(s);
+}
+/** Serviço inteiro emitido/medido → avanço 100% e data de conclusão. */
+function rollup(s) {
+  const stS = serviceStatus(s);
+  if (['emitido_concluido', 'medido_faturado'].includes(stS)) { s.progress_percentage = 100; if (!s.concluded_date) s.concluded_date = s.documents.map(x => x.completion_date).filter(Boolean).sort().at(-1) || todayIso(); }
+}
+
+/* ---------- Modal de serviço ---------- */
+let draft = null, draftFull = false;
+function openService(id, duplicate) {
+  const base = id ? state.services.find(s => s.id === id) : null;
+  draft = base ? structuredClone(base) : normalizeService({ start_date: todayIso(), documents: [{ type: 'HH_ENG', quantity: 0, status: 'planejado' }] });
+  if (duplicate) {
+    draft.id = uid(); draft.concluded_date = ''; draft.progress_percentage = 0; draft.stages.forEach(st => st.completed = false);
+    draft.documents.forEach(d => Object.assign(d, { id: uid(), status: 'planejado', measured: false, measurement_date: '', invoice_date: '', payment_date: '', completion_date: '', received: false, received_date: '', priority: null, exec_start: '', exec_end: '' }));
+  }
+  draft._isNew = !base || duplicate;
+  renderServiceModal();
+}
+function renderServiceModal() {
+  const s = draft, comp = companyOf(s);
+  const companies = state.companies.filter(c => c.active || c.id === s.company_id);
+  const emit = s.documents.filter(d => d.status === 'emitido_concluido');
+  document.getElementById('modal-root').innerHTML = `
+  <div class="ov"><div class="modal ${draftFull ? 'full' : ''}">
+    <div class="mh"><h3>${s._isNew ? 'Novo serviço' : 'Editar serviço'} <span style="margin-left:8px">${badge(serviceStatus(s))}</span></h3>
+      <div style="display:flex;gap:6px"><button class="btn sm" data-full>${draftFull ? '⤡ Janela' : '⤢ Tela cheia'}</button><button class="btn sm" data-close>✕</button></div></div>
+    <div class="mb">
+      <div class="sec"><h4>Identificação</h4><div class="fg">
+        <label class="f">Nº Projeto<input data-f="project_number" value="${esc(s.project_number)}" placeholder="0440-1858"></label>
+        <label class="f">Nota / OS / SERD<input data-f="parent_project" value="${esc(s.parent_project)}"></label>
+        <label class="f" title="Usada no nº do documento: SE-disciplina-projeto-MC">Disciplina *<select data-f="discipline">${state.disciplines.map(x => `<option value="${esc(x.code)}" ${x.code === s.discipline ? 'selected' : ''}>${esc(discLabel(x))}</option>`).join('')}<option value="__new__">+ Nova disciplina…</option></select></label>
+        <label class="f">Empresa *<select data-f="company_id"><option value="">— Selecionar —</option>${companies.map(c => `<option value="${c.id}" ${c.id === s.company_id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+        <label class="f span4">Título<input data-f="title" value="${esc(s.title)}"></label>
+      </div></div>
+
+      <div class="sec"><h4>Documentos / itens — status, observação e valor por documento</h4>
+        ${comp ? `<div class="muted" style="font-size:12px;margin-bottom:6px">Tabela ${esc(comp.name)}: A1 Básico ${brl(comp.a1_basico_value)} · A1 Detalhado ${brl(comp.a1_detalhado_value)} · HH Eng. ${brl(comp.hh_eng_value)} · HH Proj. ${brl(comp.hh_projetista_value)}</div>` : '<div class="warn-box" style="margin-bottom:8px">Selecione a empresa para calcular os valores.</div>'}
+        <div class="doc-scroll"><table class="doc-tbl"><thead><tr><th style="width:250px">Nº Documento</th><th style="width:220px">Observação do documento</th><th style="width:130px">Item</th><th style="width:80px" class="num">Qtd</th><th style="width:95px" class="num">Unitário</th><th style="width:110px" class="num">Total</th><th style="width:175px">Status</th><th style="width:130px">Conclusão doc.</th><th style="width:130px">Medição</th><th style="width:130px">NF até</th><th style="width:130px">Pagamento</th><th style="width:70px">Recebido</th><th style="width:30px"></th></tr></thead>
+        <tbody>${s.documents.map((d, i) => {
+          const isM = d.status === 'medido_faturado';
+          return `<tr>
+          <td><input data-d="${i}" data-k="doc_number" value="${esc(d.doc_number)}" placeholder="${esc(docPrefix(s))}001-001-R00" title="Prefixo automático: ${esc(docPrefix(s))} — complete o restante (ex.: 001-001-R00)"></td>
+          <td><input data-d="${i}" data-k="note" value="${esc(d.note)}" placeholder="Ex.: Treliça, Suporte..."></td>
+          <td><select data-d="${i}" data-k="type">${DOC_TYPES.map(t => `<option value="${t.v}" ${t.v === d.type ? 'selected' : ''}>${t.l}</option>`).join('')}</select></td>
+          <td><input data-d="${i}" data-k="quantity" type="number" step="0.001" min="0" value="${d.quantity}" style="text-align:right"></td>
+          <td class="num muted">${brl(unitValue(comp, d.type))}</td>
+          <td class="num" id="dv-${i}"><b>${brl(docValue(s, d))}</b></td>
+          <td><select data-d="${i}" data-k="status">${statusOpts(d.status)}</select></td>
+          <td><input data-d="${i}" data-k="completion_date" type="date" value="${d.completion_date}"></td>
+          <td><input data-d="${i}" data-k="measurement_date" type="date" value="${d.measurement_date}" ${isM ? '' : 'disabled'} class="${isM && !d.measurement_date ? 'err' : ''}"></td>
+          <td><input data-d="${i}" data-k="invoice_date" type="date" value="${d.invoice_date}" ${isM ? '' : 'disabled'}></td>
+          <td><input data-d="${i}" data-k="payment_date" type="date" value="${d.payment_date}" ${isM ? '' : 'disabled'}></td>
+          <td style="text-align:center"><input type="checkbox" data-d="${i}" data-k="received" ${d.received ? 'checked' : ''} ${isM ? '' : 'disabled'} style="width:auto"></td>
+          <td><button class="btn sm danger" data-deldoc="${i}">✕</button></td></tr>`;
+        }).join('')}</tbody></table></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;gap:6px"><button class="btn sm" data-adddoc>+ Adicionar documento</button>
+          ${emit.length ? `<button class="btn sm primary" data-measemit>Medir ${emit.length} emitido(s)</button>` : ''}</div>
+          <div class="total-box"><span>Qtd total: <b id="m-qty">${fmtN(serviceQty(s))}</b></span><span>Valor total: <b id="m-total">${brl(serviceValue(s))}</b></span></div>
+        </div>
+        <div class="info" style="font-size:12px;margin-top:8px">Medido/Faturado: medição dia 25 · NF até dia 5 do mês seguinte · pagamento dia 10 do mês subsequente.</div>
+      </div>
+
+      <div class="sec"><h4>Datas do serviço</h4><div class="fg">
+        <label class="f">Data de início<input type="date" data-f="start_date" value="${s.start_date}"></label>
+        <label class="f">Data fim (prevista)<input type="date" data-f="completion_date" value="${s.completion_date}"></label>
+        <label class="f">Data de conclusão<input type="date" data-f="concluded_date" value="${s.concluded_date}"></label>
+        <label class="f">Avanço físico: <span id="m-progv">${s.progress_percentage}%</span><input type="range" min="0" max="100" data-f="progress_percentage" value="${s.progress_percentage}"></label>
+      </div></div>
+
+      <div class="sec"><h4>Etapas</h4><div class="stages">
+        ${s.stages.map((st, i) => `<label><input type="checkbox" data-stage="${i}" ${st.completed ? 'checked' : ''}> ${esc(st.name)}</label>`).join('')}
+      </div></div>
+
+      <div class="sec"><h4>Observações do serviço</h4><label class="f"><textarea rows="3" data-f="notes">${esc(s.notes)}</textarea></label></div>
+    </div>
+    <div class="mf"><button class="btn" data-close>Cancelar</button><button class="btn primary" data-save>Salvar</button></div>
+  </div></div>`;
+  bindServiceModal();
+}
+function refreshTotals() {
+  draft.documents.forEach((d, i) => { const el = document.getElementById('dv-' + i); if (el) el.innerHTML = `<b>${brl(docValue(draft, d))}</b>`; });
+  document.getElementById('m-total').textContent = brl(serviceValue(draft));
+  document.getElementById('m-qty').textContent = fmtN(serviceQty(draft));
+}
+function bindServiceModal() {
+  const root = document.getElementById('modal-root');
+  root.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModal);
+  root.querySelector('[data-full]').onclick = () => { draftFull = !draftFull; renderServiceModal(); };
+  root.querySelectorAll('[data-f]').forEach(el => {
+    el.oninput = el.onchange = () => {
+      const k = el.dataset.f;
+      let v = el.value;
+      if (k === 'progress_percentage') { v = +v; document.getElementById('m-progv').textContent = v + '%'; }
+      if (k === 'discipline' && v === '__new__') {
+        const code = addDiscipline();
+        if (!code) { el.value = draft.discipline; return; }
+        v = code;
+      }
+      const oldPrefix = docPrefix(draft);
+      draft[k] = v;
+      if (k === 'project_number' || k === 'discipline') {
+        // atualiza nº de documentos ainda não editados (vazios ou só com o prefixo antigo)
+        const np = docPrefix(draft);
+        draft.documents.forEach((d, i) => {
+          if (!d.doc_number || d.doc_number === oldPrefix) {
+            d.doc_number = draft.project_number ? np : '';
+            const inp = root.querySelector(`[data-d="${i}"][data-k="doc_number"]`); if (inp) inp.value = d.doc_number;
+          }
+        });
+        root.querySelectorAll('[data-k="doc_number"]').forEach(inp => inp.placeholder = np + '001-001-R00');
+        if (k === 'discipline' && el.value !== v) renderServiceModal(); // nova disciplina criada: recarrega a lista
+      }
+      if (k === 'company_id') { draft.company_name = companyOf(draft)?.name || ''; renderServiceModal(); }
+    };
+  });
+  root.querySelectorAll('[data-d]').forEach(el => {
+    const handler = e => {
+      const d = draft.documents[+el.dataset.d], k = el.dataset.k;
+      if (k === 'status') {
+        if (e.type !== 'change') return;
+        if (el.value === 'medido_faturado') { askMeasurement([{ s: draft, d }], () => renderServiceModal()); return; }
+        applyStatus(draft, d, el.value); renderServiceModal(); return;
+      }
+      if (k === 'received') { d.received = el.checked; d.received_date = el.checked ? (d.received_date || todayIso()) : ''; return; }
+      d[k] = k === 'quantity' ? num(el.value) : el.value;
+      if (k === 'measurement_date' && e.type === 'change' && el.value) { const c = measurementCycle(el.value); d.invoice_date = c.invoice; d.payment_date = c.payment; renderServiceModal(); return; }
+      if (k === 'type') renderServiceModal(); else if (k === 'quantity') refreshTotals();
+    };
+    el.oninput = handler; el.onchange = handler;
+  });
+  root.querySelectorAll('[data-stage]').forEach(el => el.onchange = () => {
+    draft.stages[+el.dataset.stage].completed = el.checked;
+    draft.progress_percentage = Math.round(draft.stages.filter(s => s.completed).length / draft.stages.length * 100);
+    renderServiceModal();
+  });
+  root.querySelector('[data-adddoc]').onclick = () => {
+    const last = draft.documents.at(-1);
+    draft.documents.push(normalizeDoc({ doc_number: draft.project_number ? docPrefix(draft) : '', type: last?.type || 'HH_ENG', status: last && last.status !== 'medido_faturado' ? last.status : 'planejado' }, {}));
+    renderServiceModal();
+    const inp = document.querySelector(`#modal-root [data-d="${draft.documents.length - 1}"][data-k="doc_number"]`);
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  };
+  const me = root.querySelector('[data-measemit]');
+  if (me) me.onclick = () => askMeasurement(draft.documents.filter(d => d.status === 'emitido_concluido').map(d => ({ s: draft, d })), () => renderServiceModal());
+  root.querySelectorAll('[data-deldoc]').forEach(b => b.onclick = () => { draft.documents.splice(+b.dataset.deldoc, 1); renderServiceModal(); });
+  root.querySelector('[data-save]').onclick = saveDraft;
+}
+function saveDraft() {
+  const docsOk = draft.documents.filter(d => d.doc_number || d.quantity || d.note);
+  if (!draft.company_id && docsOk.some(d => d.status !== 'cancelado')) return alert('Selecione a empresa.');
+  if (docsOk.some(d => d.status === 'medido_faturado' && !d.measurement_date)) return alert('Informe a data de medição dos documentos Medido/Faturado.');
+  if (!draft.project_number && !draft.title) return alert('Informe o nº do projeto ou título.');
+  const s = structuredClone(draft); delete s._isNew;
+  s.documents = s.documents.filter(d => d.doc_number || d.quantity || d.note);
+  s.documents.forEach(d => d.measured = d.status === 'medido_faturado');
+  touch(s);
+  const i = state.services.findIndex(x => x.id === s.id);
+  if (i >= 0) state.services[i] = s; else state.services.push(s);
+  save(); closeModal(); render(); toast('Serviço salvo');
+}
+/** Modal de medição — obrigatório ao marcar Medido/Faturado. items = [{s, d}] */
+function askMeasurement(items, done) {
+  const d0 = items.find(x => x.d.measurement_date)?.d.measurement_date || defaultMeasurementDate();
+  const holder = document.createElement('div');
+  holder.className = 'ov'; holder.style.zIndex = 60;
+  const total = items.reduce((a, x) => a + docValue(x.s, x.d), 0);
+  holder.innerHTML = `<div class="modal small"><div class="mh"><h3>Marcar como Medido/Faturado</h3></div><div class="mb">
+    <div class="sec"><div class="muted" style="margin-bottom:10px">${items.length === 1 ? `${esc(items[0].s.project_number)} — ${esc(items[0].d.doc_number)}` : `${items.length} documentos`}<br>Valor: <b style="color:var(--ink)">${brl(total)}</b></div>
+    <div class="fg" style="grid-template-columns:1fr">
+      <label class="f">Data de medição * (padrão dia 25)<input type="date" id="q-meas" value="${d0}"></label>
+      <label class="f">NF emitida até (dia 5 do mês seguinte)<input type="date" id="q-inv"></label>
+      <label class="f">Pagamento previsto (dia 10 do mês subsequente)<input type="date" id="q-pay"></label>
+    </div></div></div>
+    <div class="mf"><button class="btn" id="q-cancel">Cancelar</button><button class="btn primary" id="q-ok">Confirmar medição</button></div></div>`;
+  document.body.appendChild(holder);
+  const paint = d => { const c = d ? measurementCycle(d) : null; holder.querySelector('#q-inv').value = c ? c.invoice : ''; holder.querySelector('#q-pay').value = c ? c.payment : ''; };
+  paint(d0);
+  holder.querySelector('#q-meas').onchange = e => paint(e.target.value);
+  holder.querySelector('#q-cancel').onclick = () => { holder.remove(); done(false); };
+  holder.querySelector('#q-ok').onclick = () => {
+    const m = holder.querySelector('#q-meas').value;
+    if (!m) return alert('Informe a data de medição.');
+    const inv = holder.querySelector('#q-inv').value, pay = holder.querySelector('#q-pay').value;
+    items.forEach(({ s, d }) => {
+      applyStatus(s, d, 'medido_faturado');
+      Object.assign(d, { measurement_date: m, invoice_date: inv, payment_date: pay, measured: true });
+      if (!d.completion_date) d.completion_date = m;
+    });
+    items.forEach(({ s }) => rollup(s));
+    holder.remove(); done(true);
+  };
+}
+function closeModal() { document.getElementById('modal-root').innerHTML = ''; draft = null; }
+
+/* ============================ Mapa de Carga ============================ */
+function mapaDocs() {
+  const M = ui.mapa, q = norm(M.search);
+  return allDocs().filter(({ s, d }) => {
+    if (M.statuses.size && !M.statuses.has(d.status)) return false;
+    if (M.types.size && !M.types.has(d.type)) return false;
+    if (q && !norm([s.project_number, s.title, s.company_name, d.doc_number, d.note].join(' ')).includes(q)) return false;
+    if (M.from && (d.exec_end || s.completion_date || '9999') < M.from) return false;
+    if (M.to && (d.exec_start || s.start_date || '0000') > M.to) return false;
+    return true;
+  });
+}
+function renumber() {
+  allDocs().filter(x => x.d.priority != null).sort((a, b) => a.d.priority - b.d.priority).forEach((x, i) => x.d.priority = i + 1);
+}
+function findDoc(key) { const [sid, did] = key.split('|'); const s = state.services.find(x => x.id === sid); return { s, d: s?.documents.find(x => x.id === did) }; }
+function stageChk(s, key) {
+  const st = nextStage(s);
+  return st ? `<label class="stage-chk"><input type="checkbox" data-stagedone="${key}"> ${esc(st.name)}</label>` : `<span class="stage-chk" style="color:var(--good)">✔ Etapas concluídas</span>`;
+}
+VIEWS.mapa = function () {
+  const M = ui.mapa, docs = mapaDocs();
+  const queue = docs.filter(x => x.d.priority == null);
+  const seq = docs.filter(x => x.d.priority != null).sort((a, b) => a.d.priority - b.d.priority);
+  const hh = docs.filter(x => x.d.type === 'HH_ENG').reduce((a, x) => a + num(x.d.quantity), 0);
+  const key = x => `${x.s.id}|${x.d.id}`;
+  const subSel = x => `<select class="cell-in" data-sub="${key(x)}">${SUBSTATUS.map(o => `<option value="${o.v}" ${o.v === x.d.substatus ? 'selected' : ''}>${o.l}</option>`).join('')}</select>`;
+  const docCell = x => `<div class="t">${esc(x.d.doc_number) || '—'}</div>${x.d.note ? `<div class="ob">${esc(x.d.note)}</div>` : ''}${stageChk(x.s, key(x))}`;
+  return `
+  <div class="head"><div><h2>Mapa de Carga</h2><div class="desc">Sequência de execução e fila de priorização de documentos</div></div>
+    <div class="btns"><button class="btn pdf" data-act="mapa-pdf">📄 Exportar PDF</button></div></div>
+  <div class="grid kpis">
+    <div class="card kpi center"><div class="lbl">Total de documentação</div><div class="val">${docs.length}</div></div>
+    <div class="card kpi center"><div class="lbl">Priorizados</div><div class="val">${seq.length}</div></div>
+    <div class="card kpi center"><div class="lbl">Em fila</div><div class="val">${queue.length}</div></div>
+    <div class="card kpi center"><div class="lbl">HH Eng.</div><div class="val">${fmtN(hh)}</div></div>
+    <div class="card kpi center"><div class="lbl">Valor total</div><div class="val">${brl(docs.reduce((a, x) => a + x.value, 0))}</div></div>
+  </div>
+  <div class="card fbox">
+    <div class="filters" style="margin-bottom:10px">
+      <input class="search" id="m-search" placeholder="Buscar por projeto, documento, título..." value="${esc(M.search)}">
+      <div class="seg-btns"><button class="${M.view === 'gantt' ? 'on' : ''}" data-mview="gantt">Gantt</button><button class="${M.view === 'tabela' ? 'on' : ''}" data-mview="tabela">Tabela</button></div>
+      <span class="muted">Período de execução:</span><input type="date" id="m-from" value="${M.from}"><span class="muted">até</span><input type="date" id="m-to" value="${M.to}">
+    </div>
+    <div class="chips" style="margin:0"><span class="muted" style="margin-right:4px">Status:</span>
+      ${STATUS.map(s => `<button class="chip ${M.statuses.has(s.v) ? 'on' : ''}" data-mst="${s.v}">${s.l}</button>`).join('')}
+      <span class="muted" style="margin:0 4px 0 10px">Tipo:</span>
+      ${DOC_TYPES.map(t => `<button class="chip ${M.types.has(t.v) ? 'on' : ''}" data-mty="${t.v}">${t.s}</button>`).join('')}
+      <button class="link red" data-act="mapa-clear" style="margin-left:8px">Limpar filtros</button>
+    </div>
+  </div>
+
+  <div class="panel queue"><div class="ph"><span>📥 Fila aguardando priorização (${queue.length})</span>${queue.length ? '<button class="btn sm orange" data-act="prio-all">Priorizar todos</button>' : ''}</div>
+    ${queue.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Projeto</th><th>Documento</th><th>Empresa</th><th>Tipo</th><th class="num">Qtd</th><th class="num">Valor</th><th>Início (exec.)</th><th>Concl. (exec.)</th><th>Substatus</th><th>Status</th><th></th></tr></thead><tbody>
+      ${queue.map(x => `<tr><td class="t">${esc(x.s.project_number)}</td><td style="min-width:240px">${docCell(x)}</td><td>${esc(x.s.company_name)}</td><td class="nowrap">${typeInfo(x.d.type).s}</td>
+        <td class="num">${fmtN(x.d.quantity)}</td><td class="num">${brl(x.value)}</td>
+        <td><input type="date" class="cell-in" data-exec="${key(x)}|exec_start" value="${x.d.exec_start}"><div class="cad">Cadastro: ${fmtD(x.s.start_date) || '—'}</div></td>
+        <td><input type="date" class="cell-in" data-exec="${key(x)}|exec_end" value="${x.d.exec_end}"><div class="cad">Cadastro: ${fmtD(x.s.completion_date) || '—'}</div></td>
+        <td>${subSel(x)}</td><td><select class="cell-in" data-mstatus="${key(x)}">${statusOpts(x.d.status)}</select></td>
+        <td><button class="btn sm primary" data-prio="${key(x)}">↑ Priorizar</button></td></tr>`).join('')}
+    </tbody></table></div>` : '<div class="empty">Nenhum documento aguardando priorização</div>'}
+  </div>
+
+  <div class="panel seq"><div class="ph"><span>☰ Sequência de execução (${seq.length})</span></div>
+    ${seq.length ? (M.view === 'gantt' ? ganttHtml(seq) : `<div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Projeto</th><th>Documento</th><th>Empresa</th><th>Tipo</th><th class="num">Qtd</th><th class="num">Valor</th><th>Início (exec.)</th><th>Concl. (exec.)</th><th>Substatus</th><th>Status</th></tr></thead><tbody>
+      ${seq.map(x => `<tr><td><span class="seqno">${x.d.priority}</span></td><td class="t">${esc(x.s.project_number)}</td><td style="min-width:220px">${docCell(x)}</td><td>${esc(x.s.company_name)}</td><td>${typeInfo(x.d.type).s}</td><td class="num">${fmtN(x.d.quantity)}</td><td class="num">${brl(x.value)}</td>
+        <td><input type="date" class="cell-in" data-exec="${key(x)}|exec_start" value="${x.d.exec_start}"></td><td><input type="date" class="cell-in" data-exec="${key(x)}|exec_end" value="${x.d.exec_end}"></td>
+        <td>${subSel(x)}</td><td><select class="cell-in" data-mstatus="${key(x)}">${statusOpts(x.d.status)}</select></td></tr>`).join('')}</tbody></table></div>`)
+      + `<div class="muted" style="padding:12px 16px 8px;font-size:13px">Reordenar sequência (arraste ou use as setas):</div>
+      <div class="reorder">${seq.map((x, i) => `<div class="it" draggable="true" data-drag="${key(x)}">
+        <span class="seqno">${x.d.priority}</span>
+        <div class="grow"><div><a href="#" class="t" data-edit="${x.s.id}">${esc(x.d.doc_number) || '—'}</a> ${badge(x.d.status)}</div>
+          <div class="s">${esc(x.s.project_number)} · ${esc(x.s.company_name)} · <b style="color:var(--primary)">${x.s.progress_percentage}%</b> ${x.d.exec_start ? `· ${fmtD(x.d.exec_start)} → ${fmtD(x.d.exec_end)}` : ''}</div>
+          ${x.d.note ? `<div class="ob">${esc(x.d.note)}</div>` : ''}${stageChk(x.s, key(x))}</div>
+        ${subSel(x)}
+        <button class="btn sm" data-up="${key(x)}" ${i === 0 ? 'disabled' : ''}>↑</button><button class="btn sm" data-down="${key(x)}" ${i === seq.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="link red" data-unprio="${key(x)}">Remover</button></div>`).join('')}</div>`
+      : '<div class="empty">Nenhum documento priorizado. Use “Priorizar” na fila acima.</div>'}
+  </div>`;
+};
+function ganttHtml(seq) {
+  const today = todayIso();
+  const starts = seq.map(x => x.d.exec_start || x.s.start_date).filter(Boolean), ends = seq.map(x => x.d.exec_end || x.s.completion_date).filter(Boolean);
+  let a = [...starts, today].sort()[0], b = [...ends, addDaysIso(today, 14)].sort().at(-1);
+  if (ui.mapa.from) a = ui.mapa.from; if (ui.mapa.to) b = ui.mapa.to;
+  a = addDaysIso(a, -1);
+  const n = Math.min(daysBetween(a, b) + 2, 400);
+  const days = Array.from({ length: n }, (_, i) => addDaysIso(a, i));
+  const months = []; days.forEach(d => { const k = d.slice(0, 7); if (!months.length || months.at(-1).k !== k) months.push({ k, n: 0 }); months.at(-1).n++; });
+  const W = 34;
+  return `<div class="gantt"><table>
+    <thead><tr><th class="lbl" rowspan="2">Documento</th>${months.map(m => `<th class="mon" colspan="${m.n}">${monthLabel(m.k)}</th>`).join('')}</tr>
+    <tr>${days.map(d => { const wd = new Date(d + 'T00:00').getDay(); return `<th class="day ${wd === 0 || wd === 6 ? 'we' : ''} ${d === today ? 'today' : ''}">${+d.slice(8)}</th>`; }).join('')}</tr></thead>
+    <tbody>${seq.map(x => {
+      const st = x.d.exec_start || x.s.start_date, en = x.d.exec_end || x.s.completion_date || st;
+      let bar = '';
+      if (st) {
+        const off = Math.max(0, daysBetween(a, st)), len = Math.max(1, daysBetween(st, en) + 1);
+        bar = `<div class="bar" style="left:${off * W}px;width:${Math.min(len, n - off) * W - 4}px" title="${esc(x.d.doc_number)}: ${fmtD(st)} a ${fmtD(en)}${x.d.exec_start ? '' : ' (datas do cadastro)'}">${typeInfo(x.d.type).s} · ${fmtN(x.d.quantity)}</div>`;
+      }
+      return `<tr><td class="lbl"><div style="display:flex;align-items:center"><span class="seqno">${x.d.priority}</span><div><a href="#" data-edit="${x.s.id}" class="t" style="font-size:13px">${esc(x.d.doc_number) || '—'}</a><div class="s">${esc(x.s.project_number)}</div>${x.d.note ? `<div class="ob" style="font-style:normal;text-transform:uppercase;font-size:11px">${esc(x.d.note)}</div>` : ''}</div></div></td>
+        <td class="track" colspan="${n}" style="min-width:${n * W}px">${bar || '<span class="s" style="padding-left:10px">sem datas</span>'}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+function bindMapa(m) {
+  const M = ui.mapa;
+  const s1 = m.querySelector('#m-search'); if (s1) s1.oninput = () => { M.search = s1.value; const p = s1.selectionStart; render(); const n = document.getElementById('m-search'); n.focus(); n.setSelectionRange(p, p); };
+  m.querySelectorAll('#m-from,#m-to').forEach(el => el.onchange = () => { M[el.id === 'm-from' ? 'from' : 'to'] = el.value; render(); });
+  m.querySelectorAll('[data-mview]').forEach(b => b.onclick = () => { M.view = b.dataset.mview; render(); });
+  m.querySelectorAll('[data-mst]').forEach(b => b.onclick = () => { M.statuses.has(b.dataset.mst) ? M.statuses.delete(b.dataset.mst) : M.statuses.add(b.dataset.mst); render(); });
+  m.querySelectorAll('[data-mty]').forEach(b => b.onclick = () => { M.types.has(b.dataset.mty) ? M.types.delete(b.dataset.mty) : M.types.add(b.dataset.mty); render(); });
+  const persist = s => { touch(s); save(); render(); };
+  m.querySelectorAll('[data-exec]').forEach(el => el.onchange = () => { const [sid, did, k] = el.dataset.exec.split('|'); const { s, d } = findDoc(sid + '|' + did); d[k] = el.value; persist(s); });
+  m.querySelectorAll('[data-sub]').forEach(el => el.onchange = () => { const { s, d } = findDoc(el.dataset.sub); d.substatus = el.value; persist(s); });
+  m.querySelectorAll('[data-mstatus]').forEach(el => el.onchange = () => { const { s, d } = findDoc(el.dataset.mstatus); setDocStatus(s, d, el.value); });
+  m.querySelectorAll('[data-stagedone]').forEach(el => el.onchange = () => {
+    const { s } = findDoc(el.dataset.stagedone); const st = nextStage(s); if (!st) return;
+    st.completed = true; s.progress_percentage = Math.round(s.stages.filter(x => x.completed).length / s.stages.length * 100); persist(s);
+  });
+  const maxPrio = () => Math.max(0, ...allDocs().map(x => x.d.priority || 0));
+  m.querySelectorAll('[data-prio]').forEach(b => b.onclick = () => { const { s, d } = findDoc(b.dataset.prio); d.priority = maxPrio() + 1; persist(s); });
+  m.querySelectorAll('[data-unprio]').forEach(b => b.onclick = () => { const { s, d } = findDoc(b.dataset.unprio); d.priority = null; renumber(); persist(s); });
+  const move = (k, dir) => {
+    const seq = allDocs().filter(x => x.d.priority != null).sort((a, b) => a.d.priority - b.d.priority);
+    const visible = mapaDocs().map(x => x.d);
+    const vis = seq.filter(x => visible.includes(x.d));
+    const i = vis.findIndex(x => `${x.s.id}|${x.d.id}` === k), j = i + dir;
+    if (j < 0 || j >= vis.length) return;
+    [vis[i].d.priority, vis[j].d.priority] = [vis[j].d.priority, vis[i].d.priority];
+    save(); render();
+  };
+  m.querySelectorAll('[data-up]').forEach(b => b.onclick = () => move(b.dataset.up, -1));
+  m.querySelectorAll('[data-down]').forEach(b => b.onclick = () => move(b.dataset.down, 1));
+  let dragKey = null;
+  m.querySelectorAll('[data-drag]').forEach(it => {
+    it.ondragstart = () => { dragKey = it.dataset.drag; it.classList.add('drag'); };
+    it.ondragend = () => it.classList.remove('drag');
+    it.ondragover = e => e.preventDefault();
+    it.ondrop = e => {
+      e.preventDefault(); if (!dragKey || dragKey === it.dataset.drag) return;
+      const seq = allDocs().filter(x => x.d.priority != null).sort((a, b) => a.d.priority - b.d.priority);
+      const from = seq.findIndex(x => `${x.s.id}|${x.d.id}` === dragKey), to = seq.findIndex(x => `${x.s.id}|${x.d.id}` === it.dataset.drag);
+      const [mv] = seq.splice(from, 1); seq.splice(to, 0, mv); seq.forEach((x, i) => x.d.priority = i + 1);
+      save(); render();
+    };
+  });
+}
+
+/* ============================ Empresas ============================ */
+VIEWS.empresas = function () {
+  return `
+  <div class="head"><h2>Empresas</h2><button class="btn primary" data-act="new-company">+ Nova empresa</button></div>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Empresa</th><th class="num">A1 Básico (R$/folha)</th><th class="num">A1 Detalhado (R$/folha)</th><th class="num">HH Engenheiro (R$/h)</th><th class="num">HH Projetista (R$/h)</th><th class="num">Serviços</th><th class="num">Valor total</th><th>Ativa</th><th></th></tr></thead>
+    <tbody>${state.companies.length ? state.companies.slice().sort((a, b) => a.name.localeCompare(b.name)).map(c => {
+      const ss = state.services.filter(s => s.company_id === c.id);
+      const val = allDocs().filter(x => x.s.company_id === c.id && x.d.status !== 'cancelado').reduce((a, x) => a + x.value, 0);
+      const z = v => v ? brl(v) : '<span class="zero">—</span>';
+      return `<tr><td class="t">${esc(c.name)}</td><td class="num">${z(c.a1_basico_value)}</td><td class="num">${z(c.a1_detalhado_value)}</td><td class="num">${z(c.hh_eng_value)}</td><td class="num">${z(c.hh_projetista_value)}</td>
+        <td class="num">${ss.length}</td><td class="num">${brl(val)}</td><td>${c.active ? 'Sim' : '<span class="muted">Não</span>'}</td>
+        <td><div class="actions"><button class="btn sm" data-editc="${c.id}">Editar</button><button class="btn sm danger" data-delc="${c.id}">✕</button></div></td></tr>`;
+    }).join('') : '<tr><td colspan="9" class="empty">Nenhuma empresa cadastrada</td></tr>'}</tbody>
+  </table></div>
+  <div class="head" style="margin-top:26px"><div><h2>Disciplinas</h2><div class="desc">Usadas no nº do documento: SE-<b>disciplina</b>-projeto-MC</div></div><button class="btn primary" data-act="new-disc">+ Nova disciplina</button></div>
+  <div class="tbl-wrap" style="max-width:720px"><table>
+    <thead><tr><th>Código</th><th>Descrição</th><th class="num">Serviços</th><th>Exemplo de nº</th><th></th></tr></thead>
+    <tbody>${state.disciplines.map(d => {
+      const n = state.services.filter(s => s.discipline === d.code).length;
+      return `<tr><td class="t">${esc(d.code)}</td><td>${esc(d.name) || '<span class="muted">—</span>'}</td><td class="num">${n}</td><td class="s">SE-${esc(d.code)}-0440-0020-MC001-001-R00</td>
+        <td><div class="actions"><button class="btn sm" data-editdisc="${esc(d.code)}">Editar</button><button class="btn sm danger" data-deldisc="${esc(d.code)}" ${n ? 'disabled title="Em uso por serviços"' : ''}>✕</button></div></td></tr>`;
+    }).join('')}</tbody></table></div>`;
+};
+/** Cadastra nova disciplina (prompt). Retorna o código criado ou null. */
+function addDiscipline() {
+  const raw = prompt('Código da nova disciplina (2 a 4 letras, ex.: EL, CV, AR):');
+  if (raw === null) return null;
+  const code = cleanCode(raw);
+  if (code.length < 2) { alert('Código inválido: use 2 a 4 letras/números.'); return null; }
+  if (state.disciplines.some(d => d.code === code)) { alert(`A disciplina ${code} já existe.`); return code; }
+  const name = prompt(`Descrição da disciplina ${code} (opcional):`, '') || '';
+  state.disciplines.push({ code, name: name.trim() });
+  save(); toast(`Disciplina ${code} cadastrada`);
+  return code;
+}
+function editDiscipline(code) {
+  const d = state.disciplines.find(x => x.code === code);
+  const name = prompt(`Descrição da disciplina ${code}:`, d.name);
+  if (name === null) return;
+  d.name = name.trim(); save(); render();
+}
+function deleteDiscipline(code) {
+  if (state.services.some(s => s.discipline === code)) return alert('Disciplina em uso por serviços.');
+  if (state.disciplines.length <= 1) return alert('Mantenha ao menos uma disciplina.');
+  if (!confirm(`Excluir a disciplina ${code}?`)) return;
+  state.disciplines = state.disciplines.filter(x => x.code !== code); save(); render();
+}
+function openCompany(id) {
+  const c = id ? state.companies.find(x => x.id === id) : normalizeCompany({});
+  const f = (k, l) => `<label class="f">${l}<input type="number" step="0.01" min="0" id="c-${k}" value="${c[k] || ''}"></label>`;
+  document.getElementById('modal-root').innerHTML = `
+  <div class="ov"><div class="modal small"><div class="mh"><h3>${id ? 'Editar' : 'Nova'} empresa</h3><button class="btn sm" data-close>✕</button></div>
+  <div class="mb"><div class="fg" style="grid-template-columns:1fr 1fr">
+    <label class="f" style="grid-column:span 2">Nome *<input id="c-name" value="${esc(c.name)}"></label>
+    ${f('a1_basico_value', 'A1 Básico (R$/folha)')}${f('a1_detalhado_value', 'A1 Detalhado (R$/folha)')}
+    ${f('hh_eng_value', 'HH Engenheiro (R$/h)')}${f('hh_projetista_value', 'HH Projetista (R$/h)')}
+    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="c-active" ${c.active ? 'checked' : ''}> Empresa ativa</label>
+  </div>${id ? '<div class="info" style="margin-top:12px">Alterar valores recalcula todos os documentos desta empresa.</div>' : ''}</div>
+  <div class="mf"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="c-save">Salvar</button></div></div></div>`;
+  const root = document.getElementById('modal-root');
+  root.querySelectorAll('[data-close]').forEach(b => b.onclick = closeModal);
+  root.querySelector('#c-save').onclick = () => {
+    const name = root.querySelector('#c-name').value.trim();
+    if (!name) return alert('Informe o nome.');
+    if (state.companies.some(x => x.id !== c.id && norm(x.name) === norm(name))) return alert('Já existe uma empresa com esse nome.');
+    Object.assign(c, { name, active: root.querySelector('#c-active').checked, updated_date: new Date().toISOString() });
+    ['a1_basico_value', 'a1_detalhado_value', 'hh_eng_value', 'hh_projetista_value'].forEach(k => c[k] = num(root.querySelector('#c-' + k).value));
+    if (!id) state.companies.push(c);
+    state.services.forEach(s => { if (s.company_id === c.id) s.company_name = c.name; });
+    save(); closeModal(); render(); toast('Empresa salva');
+  };
+}
+function deleteCompany(id) {
+  const c = state.companies.find(x => x.id === id);
+  const n = state.services.filter(s => s.company_id === id).length;
+  if (n) return alert(`"${c.name}" possui ${n} serviço(s) vinculados. Desative a empresa ou mova os serviços antes de excluir.`);
+  if (!confirm(`Excluir a empresa "${c.name}"?`)) return;
+  state.companies = state.companies.filter(x => x.id !== id); save(); render();
+}
+
+/* ============================ Relatórios ============================ */
+const REP_DATES = [
+  { v: 'completion_date', l: 'Dt. Conclusão Doc.', get: x => x.d.completion_date },
+  { v: 'start_date', l: 'Dt. Início', get: x => x.s.start_date },
+  { v: 'planned', l: 'Dt. Conclusão Prev.', get: x => x.s.completion_date },
+  { v: 'measurement_date', l: 'Dt. Medição', get: x => x.d.measurement_date },
+  { v: 'payment_date', l: 'Dt. Pagamento', get: x => x.d.payment_date },
+];
+const REP_TYPES = [{ v: 'geral', l: 'Geral' }, { v: 'empresa', l: 'Por Empresa' }, { v: 'projeto', l: 'Por Projeto' }, { v: 'empresa_projeto', l: 'Empresa + Projeto' }];
+function reportData() {
+  const R = ui.rep, df = REP_DATES.find(x => x.v === R.dateField);
+  const rows = allDocs().filter(x => {
+    if (!R.statuses.has(x.d.status)) return false;
+    if (R.companies.size && !R.companies.has(x.s.company_id)) return false;
+    const dv = df.get(x) || '';
+    if (R.from && (!dv || dv < R.from)) return false;
+    if (R.to && (!dv || dv > R.to)) return false;
+    return true;
+  }).sort((a, b) => {
+    const k = x => R.type === 'empresa' || R.type === 'empresa_projeto' ? x.s.company_name + '|' + x.s.project_number : R.type === 'projeto' ? x.s.project_number : '';
+    return k(a).localeCompare(k(b)) || (b.s.start_date || '').localeCompare(a.s.start_date || '') || a.s.project_number.localeCompare(b.s.project_number) || a.d.doc_number.localeCompare(b.d.doc_number);
+  });
+  const sum = arr => arr.reduce((a, x) => a + x.value, 0);
+  const qty = (arr, pre) => arr.filter(x => x.d.type.startsWith(pre)).reduce((a, x) => a + num(x.d.quantity), 0);
+  const med = rows.filter(x => x.d.status === 'medido_faturado');
+  const kpis = {
+    projetos: new Set(rows.map(x => x.s.project_number || x.s.id)).size, documentos: rows.length, a1: qty(rows, 'A1'), hh: qty(rows, 'HH'),
+    total: sum(rows), medido: sum(med), faturar: sum(rows.filter(x => !['medido_faturado', 'cancelado'].includes(x.d.status))),
+  };
+  // agrupamento
+  const groupsOf = x => R.type === 'empresa' ? [x.s.company_name || '(sem empresa)'] : R.type === 'projeto' ? [x.s.project_number + (x.s.title ? ' — ' + x.s.title : '')]
+    : R.type === 'empresa_projeto' ? [x.s.company_name || '(sem empresa)', x.s.project_number + (x.s.title ? ' — ' + x.s.title : '')] : [];
+  const title = 'Relatório ' + (R.type === 'geral' ? 'Geral' : REP_TYPES.find(t => t.v === R.type).l.replace('Por ', 'por '));
+  return { rows, kpis, groupsOf, title, sum };
+}
+const REP_COLS = ['Projeto', 'Documento', 'Observação', 'Avanço', 'Empresa', 'Tipo', 'Status', 'Qtd', 'Valor', 'Dt. Início', 'Dt. Concl. Prev.', 'Concl. Doc.', 'Dt. Medição', 'Dt. Pagamento'];
+const repCells = x => [x.s.project_number, x.d.doc_number, x.d.note, x.s.progress_percentage + '%', x.s.company_name, typeInfo(x.d.type).s, statusLabel(x.d.status), fmtN(x.d.quantity), brl(x.value),
+  fmtD(x.s.start_date), fmtD(x.s.completion_date), fmtD(x.d.completion_date), fmtD(x.d.measurement_date), fmtD(x.d.payment_date)];
+/** Linhas com cabeçalhos/subtotais de grupo: [{kind:'grp'|'sub'|'row', level, label, x, items}] */
+function groupedLines(rows, groupsOf, sum) {
+  const out = []; let cur = [];
+  const flush = (lvl, label, items) => out.push({ kind: 'sub', level: lvl, label, items });
+  if (!rows.length || !groupsOf(rows[0]).length) return rows.map(x => ({ kind: 'row', x }));
+  const depth = groupsOf(rows[0]).length;
+  let open = Array(depth).fill(null), buckets = Array.from({ length: depth }, () => []);
+  rows.forEach(x => {
+    const g = groupsOf(x);
+    for (let l = 0; l < depth; l++) {
+      if (g[l] !== open[l]) {
+        for (let k = depth - 1; k >= l; k--) if (open[k] !== null) { flush(k, open[k], buckets[k]); buckets[k] = []; }
+        for (let k = l; k < depth; k++) { open[k] = g[k]; out.push({ kind: 'grp', level: k, label: g[k] }); }
+        break;
+      }
+    }
+    out.push({ kind: 'row', x }); buckets.forEach(b => b.push(x));
+  });
+  for (let k = depth - 1; k >= 0; k--) flush(k, open[k], buckets[k]);
+  return out;
+}
+VIEWS.relatorios = function () {
+  const R = ui.rep, { rows, kpis, groupsOf, title, sum } = reportData();
+  const lines = groupedLines(rows, groupsOf, sum);
+  const nc = REP_COLS.length;
+  return `
+  <div class="head"><div><h2>Relatórios</h2><div class="desc">Gere relatórios e exporte dados</div></div>
+    <div class="btns"><button class="btn" data-act="rep-json">⬇ Exportar JSON</button><button class="btn xls" data-act="rep-xlsx">⬇ Exportar Excel</button><button class="btn pdf" data-act="rep-pdf">📄 Exportar PDF</button></div></div>
+  <div class="card fbox">
+    <div class="ft">Tipo de relatório</div>
+    <div class="seg-btns">${REP_TYPES.map(t => `<button class="${R.type === t.v ? 'on' : ''}" data-rtype="${t.v}">${t.l}</button>`).join('')}</div>
+    <div class="ft">Status</div>
+    <div class="checks">${STATUS.map(s => `<label><input type="checkbox" data-rst="${s.v}" ${R.statuses.has(s.v) ? 'checked' : ''}> ${s.l}</label>`).join('')}</div>
+    <div class="ft">Filtro por data</div>
+    <div class="filters" style="margin:0"><select id="r-df">${REP_DATES.map(d => `<option value="${d.v}" ${R.dateField === d.v ? 'selected' : ''}>${d.l}</option>`).join('')}</select>
+      <span class="muted">De:</span><input type="date" id="r-from" value="${R.from}"><span class="muted">Até:</span><input type="date" id="r-to" value="${R.to}">
+      ${R.from || R.to ? '<button class="link red" data-act="r-cleardate">limpar datas</button>' : ''}</div>
+    <div class="ft">Empresa</div>
+    <div class="checks"><label><input type="radio" data-rall ${R.companies.size ? '' : 'checked'}> Todas</label>
+      ${state.companies.map(c => `<label><input type="checkbox" data-rco="${c.id}" ${R.companies.has(c.id) ? 'checked' : ''}> ${esc(c.name)}</label>`).join('')}</div>
+  </div>
+  <div class="grid kpis" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+    <div class="card kpi center"><div class="lbl">Projetos</div><div class="val">${kpis.projetos}</div></div>
+    <div class="card kpi center"><div class="lbl">Documentos</div><div class="val">${kpis.documentos}</div></div>
+    <div class="card kpi center"><div class="lbl">Total A1</div><div class="val">${fmtN(kpis.a1)}</div></div>
+    <div class="card kpi center"><div class="lbl">Total HH</div><div class="val">${fmtN(kpis.hh)} h</div></div>
+    <div class="card kpi center"><div class="lbl">Valor total</div><div class="val">${brl(kpis.total)}</div></div>
+    <div class="card kpi center"><div class="lbl">Medido</div><div class="val">${brl(kpis.medido)}</div></div>
+    <div class="card kpi center"><div class="lbl">A faturar</div><div class="val">${brl(kpis.faturar)}</div></div>
+  </div>
+  <div class="tbl-wrap tall">
+    <div class="tbl-title"><h3>${esc(title)}</h3><span class="muted">${rows.length} documentos</span></div>
+    <table><thead><tr>${REP_COLS.map((c, i) => `<th class="${[3, 7, 8].includes(i) ? 'num' : ''}">${c}</th>`).join('')}</tr></thead><tbody>
+    ${rows.length ? lines.map(L => {
+      if (L.kind === 'grp') return `<tr class="grp"><td colspan="${nc}" style="padding-left:${10 + L.level * 18}px">${esc(L.label)}</td></tr>`;
+      if (L.kind === 'sub') return `<tr class="sub"><td colspan="7" style="padding-left:${10 + L.level * 18}px">Subtotal ${esc(L.label)} · ${L.items.length} doc(s)</td><td class="num">${fmtN(L.items.reduce((a, x) => a + num(x.d.quantity), 0))}</td><td class="num">${brl(sum(L.items))}</td><td colspan="5"></td></tr>`;
+      const c = repCells(L.x);
+      return `<tr>${c.map((v, i) => i === 6 ? `<td>${badge(L.x.d.status)}</td>` : i === 2 ? `<td><span class="ob">${esc(v)}</span></td>` : `<td class="${[3, 7, 8].includes(i) ? 'num' : 'nowrap'} ${i === 1 ? 't' : ''}">${esc(v)}</td>`).join('')}</tr>`;
+    }).join('') : `<tr><td colspan="${nc}" class="empty">Nenhum documento para os filtros</td></tr>`}
+    </tbody></table></div>`;
+};
+function bindRelatorios(m) {
+  const R = ui.rep;
+  m.querySelectorAll('[data-rtype]').forEach(b => b.onclick = () => { R.type = b.dataset.rtype; render(); });
+  m.querySelectorAll('[data-rst]').forEach(c => c.onchange = () => { c.checked ? R.statuses.add(c.dataset.rst) : R.statuses.delete(c.dataset.rst); render(); });
+  m.querySelectorAll('[data-rco]').forEach(c => c.onchange = () => { c.checked ? R.companies.add(c.dataset.rco) : R.companies.delete(c.dataset.rco); render(); });
+  const ra = m.querySelector('[data-rall]'); if (ra) ra.onchange = () => { R.companies.clear(); render(); };
+  const df = m.querySelector('#r-df'); if (df) df.onchange = () => { R.dateField = df.value; render(); };
+  m.querySelectorAll('#r-from,#r-to').forEach(el => el.onchange = () => { R[el.id === 'r-from' ? 'from' : 'to'] = el.value; render(); });
+}
+function reportFilterText() {
+  const R = ui.rep, parts = [];
+  if (R.statuses.size !== STATUS.length) parts.push('Status: ' + STATUS.filter(s => R.statuses.has(s.v)).map(s => s.l).join(', '));
+  if (R.from || R.to) parts.push(`${REP_DATES.find(d => d.v === R.dateField).l}: ${fmtD(R.from) || '...'} a ${fmtD(R.to) || '...'}`);
+  if (R.companies.size) parts.push('Empresas: ' + state.companies.filter(c => R.companies.has(c.id)).map(c => c.name).join(', '));
+  return parts.join(' | ');
+}
+function exportReportPdf() {
+  const { rows, kpis, groupsOf, title, sum } = reportData();
+  const body = groupedLines(rows, groupsOf, sum).map(L => {
+    if (L.kind === 'grp') return [{ content: '   '.repeat(L.level) + L.label, colSpan: REP_COLS.length, styles: { fillColor: [232, 240, 252], fontStyle: 'bold', textColor: [29, 79, 143] } }];
+    if (L.kind === 'sub') return [{ content: '   '.repeat(L.level) + `Subtotal ${L.label} (${L.items.length} doc.)`, colSpan: 7, styles: { fontStyle: 'bold', fillColor: [246, 247, 249] } },
+      { content: fmtN(L.items.reduce((a, x) => a + num(x.d.quantity), 0)), styles: { fontStyle: 'bold', halign: 'right', fillColor: [246, 247, 249] } },
+      { content: brl(sum(L.items)), styles: { fontStyle: 'bold', halign: 'right', fillColor: [246, 247, 249] } }, { content: '', colSpan: 5, styles: { fillColor: [246, 247, 249] } }];
+    return repCells(L.x);
+  });
+  pdfDoc({
+    title, filename: `relatorio_${ui.rep.type}_${stamp()}.pdf`,
+    summary: `${kpis.documentos} documentos | Valor total: ${brl(kpis.total)}`, filters: reportFilterText(),
+    kpis: [['Projetos', kpis.projetos], ['Documentos', kpis.documentos], ['Total A1', fmtN(kpis.a1)], ['Total HH', fmtN(kpis.hh) + ' h'], ['Valor Total', brl(kpis.total)], ['Medido', brl(kpis.medido)], ['A Faturar', brl(kpis.faturar)]],
+    head: REP_COLS, body, colStyles: { 0: { cellWidth: 17 }, 1: { cellWidth: 44 }, 2: { cellWidth: 30 }, 3: { halign: 'right', cellWidth: 13 }, 5: { cellWidth: 14 }, 7: { halign: 'right' }, 8: { halign: 'right', cellWidth: 22 } },
+  });
+}
+function exportReportXlsx() {
+  if (!needXLSX()) return;
+  const { rows, kpis, groupsOf, title } = reportData();
+  const R = ui.rep;
+  const data = rows.map(x => {
+    const g = groupsOf(x), o = {};
+    if (R.type === 'empresa' || R.type === 'empresa_projeto') o['Grupo: Empresa'] = x.s.company_name;
+    if (R.type === 'projeto' || R.type === 'empresa_projeto') o['Grupo: Projeto'] = x.s.project_number;
+    return Object.assign(o, {
+      'Projeto': x.s.project_number, 'Título': x.s.title, 'Nota/OS/SERD': x.s.parent_project, 'Documento': x.d.doc_number, 'Observação': x.d.note, 'Avanço (%)': x.s.progress_percentage,
+      'Empresa': x.s.company_name, 'Tipo': typeInfo(x.d.type).l, 'Status': statusLabel(x.d.status), 'Qtd': num(x.d.quantity), 'Valor Unit. (R$)': unitValue(companyOf(x.s), x.d.type), 'Valor (R$)': x.value,
+      'Dt. Início': fmtD(x.s.start_date), 'Dt. Conclusão Prev.': fmtD(x.s.completion_date), 'Dt. Conclusão Doc.': fmtD(x.d.completion_date), 'Dt. Medição': fmtD(x.d.measurement_date), 'Dt. NF': fmtD(x.d.invoice_date), 'Dt. Pagamento': fmtD(x.d.payment_date), 'Recebido': x.d.received ? 'Sim' : 'Não',
+    });
+  });
+  const wb = XLSX.utils.book_new();
+  const resumo = [[APP_NAME + ' — ' + title], ['Gerado em', new Date().toLocaleString('pt-BR')], ['Filtros', reportFilterText() || 'Nenhum'], [],
+    ['Projetos', kpis.projetos], ['Documentos', kpis.documentos], ['Total A1', kpis.a1], ['Total HH', kpis.hh], ['Valor Total (R$)', kpis.total], ['Medido (R$)', kpis.medido], ['A Faturar (R$)', kpis.faturar]];
+  if (R.type !== 'geral') {
+    const agg = {}; rows.forEach(x => { const k = groupsOf(x).join(' / '); agg[k] = agg[k] || { n: 0, q: 0, v: 0 }; agg[k].n++; agg[k].q += num(x.d.quantity); agg[k].v += x.value; });
+    resumo.push([], ['Grupo', 'Documentos', 'Qtd', 'Valor (R$)'], ...Object.entries(agg).map(([k, a]) => [k, a.n, a.q, a.v]));
+  }
+  const ws1 = XLSX.utils.aoa_to_sheet(resumo); ws1['!cols'] = [{ wch: 50 }, { wch: 18 }, { wch: 12 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Resumo');
+  const ws2 = XLSX.utils.json_to_sheet(data); if (data.length) ws2['!cols'] = Object.keys(data[0]).map(k => ({ wch: ['Documento', 'Título'].includes(k) ? 42 : Math.max(11, k.length + 2) }));
+  XLSX.utils.book_append_sheet(wb, ws2, 'Documentos');
+  XLSX.writeFile(wb, `relatorio_${R.type}_${stamp()}.xlsx`);
+}
+
+/* ---------- Gerador de PDF (padrão dos relatórios) ---------- */
+function pdfDoc({ title, filename, summary, filters, kpis, head, body, colStyles, rowStyle }) {
+  if (!window.jspdf) return alert('Biblioteca de PDF não carregou (sem internet?).');
+  const doc = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth(), M = 10;
+  const header = () => {
+    doc.setFillColor(22, 33, 58); doc.rect(0, 0, W, 14, 'F');
+    doc.setTextColor(255); doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.text(APP_NAME, M, 9.2);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text(title, W - M, 9.2, { align: 'right' });
+  };
+  header();
+  doc.setTextColor(29, 36, 51); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text(title, M, 24);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(107, 114, 128);
+  doc.text('Gerado em: ' + new Date().toLocaleString('pt-BR'), W - M, 24, { align: 'right' });
+  let y = 30;
+  if (summary) { doc.text(summary, M, y); y += 5; }
+  if (filters) { doc.text(doc.splitTextToSize('Filtros: ' + filters, W - 2 * M), M, y); y += 5; }
+  if (kpis?.length) {
+    const gap = 3, bw = (W - 2 * M - gap * (kpis.length - 1)) / kpis.length;
+    kpis.forEach(([l, v], i) => {
+      const x = M + i * (bw + gap);
+      doc.setDrawColor(229, 231, 235); doc.setFillColor(248, 250, 252); doc.roundedRect(x, y, bw, 15, 2, 2, 'FD');
+      doc.setFontSize(7.5); doc.setTextColor(107, 114, 128); doc.text(String(l).toUpperCase(), x + bw / 2, y + 5.5, { align: 'center' });
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(29, 36, 51); doc.text(String(v), x + bw / 2, y + 11.5, { align: 'center' });
+      doc.setFont('helvetica', 'normal');
+    });
+    y += 20;
+  }
+  doc.autoTable({
+    head: [head], body, startY: y, margin: { left: M, right: M, top: 18, bottom: 14 }, theme: 'grid',
+    styles: { fontSize: 7, cellPadding: 1.4, overflow: 'linebreak', lineColor: [229, 231, 235], lineWidth: .1, textColor: [29, 36, 51] },
+    headStyles: { fillColor: [42, 120, 214], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+    alternateRowStyles: { fillColor: [250, 251, 253] }, columnStyles: colStyles || {},
+    didParseCell: rowStyle, didDrawPage: d => { if (d.pageNumber > 1) header(); },
+  });
+  const n = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i); doc.setFontSize(8); doc.setTextColor(140);
+    doc.text(`${APP_NAME} — Gestão de Serviços Externos`, M, doc.internal.pageSize.getHeight() - 6);
+    doc.text(`Página ${i} de ${n}`, W - M, doc.internal.pageSize.getHeight() - 6, { align: 'right' });
+  }
+  doc.save(filename);
+}
+
+/* ============================ Recebimentos ============================ */
+const REC_DATES = [{ v: 'payment', l: 'Data de Pagamento (salva/estimada)' }, { v: 'measurement', l: 'Data de Medição' }, { v: 'completion', l: 'Data de Conclusão Doc.' }];
+function recData() {
+  const R = ui.rec, today = todayIso();
+  const rows = allDocs().filter(x => R.statuses.has(x.d.status) && ['emitido_concluido', 'medido_faturado'].includes(x.d.status)).map(x => {
+    const p = paymentInfo(x.s, x.d);
+    return { ...x, pay: p.date, est: p.est, ref: x.d.status === 'medido_faturado' ? x.d.measurement_date : (x.d.completion_date || x.s.concluded_date), refEst: x.d.status !== 'medido_faturado', ps: payState(x.d, p.date) };
+  }).filter(x => {
+    const dv = R.dateField === 'payment' ? x.pay : R.dateField === 'measurement' ? x.d.measurement_date : x.d.completion_date;
+    if (R.from && (!dv || dv < R.from)) return false;
+    if (R.to && (!dv || dv > R.to)) return false;
+    return true;
+  }).sort((a, b) => (a.pay || '9999').localeCompare(b.pay || '9999'));
+  const sum = arr => arr.reduce((a, x) => a + x.value, 0);
+  const med = rows.filter(x => x.d.status === 'medido_faturado');
+  return {
+    rows, k: {
+      total: sum(rows), aReceber: sum(med.filter(x => !x.d.received && x.pay >= today)), medido: sum(med),
+      emitido: sum(rows.filter(x => x.d.status === 'emitido_concluido')), atrasado: sum(med.filter(x => !x.d.received && x.pay && x.pay < today)),
+    },
+  };
+}
+VIEWS.recebimentos = function () {
+  const R = ui.rec, { rows, k } = recData();
+  return `
+  <div class="head"><div><h2>Relatório de Recebimentos</h2><div class="desc">Previsão de pagamentos pelo ciclo: medição dia 25 · NF dia 5 · pagamento dia 10 do mês subsequente</div></div>
+    <div class="btns"><button class="btn xls" data-act="rec-xlsx">⬇ Exportar Excel</button><button class="btn pdf" data-act="rec-pdf">📄 Exportar PDF</button></div></div>
+  <div class="card fbox">
+    <div class="ft">Status</div>
+    <div class="checks">${['emitido_concluido', 'medido_faturado'].map(v => `<label><input type="checkbox" data-recst="${v}" ${R.statuses.has(v) ? 'checked' : ''}> ${statusLabel(v)}</label>`).join('')}</div>
+    <div class="fg" style="grid-template-columns:2fr 1fr 1fr;margin-top:12px">
+      <label class="f">FILTRAR POR CAMPO DE DATA<select id="rc-df">${REC_DATES.map(d => `<option value="${d.v}" ${R.dateField === d.v ? 'selected' : ''}>${d.l}</option>`).join('')}</select></label>
+      <label class="f">DE<input type="date" id="rc-from" value="${R.from}"></label><label class="f">ATÉ<input type="date" id="rc-to" value="${R.to}"></label>
+    </div>
+  </div>
+  <div class="grid kpis">
+    <div class="card kpi"><div class="lbl">💲 Total</div><div class="val">${brl(k.total)}</div></div>
+    <div class="card kpi"><div class="lbl">🕒 A receber</div><div class="val">${brl(k.aReceber)}</div><div class="note">medidos, no prazo</div></div>
+    <div class="card kpi"><div class="lbl">✅ Medido/Faturado</div><div class="val">${brl(k.medido)}</div></div>
+    <div class="card kpi"><div class="lbl">💲 Emitido (estimado)</div><div class="val">${brl(k.emitido)}</div><div class="note">ainda a medir</div></div>
+    <div class="card kpi red"><div class="lbl">⚠ Atrasado</div><div class="val">${brl(k.atrasado)}</div><div class="note">medidos e não recebidos</div></div>
+  </div>
+  <div class="legend"><span><i style="background:#fde8ec;border:1px solid #f3b9c3"></i>Pagamento atrasado</span><span><i style="background:#fff4dc;border:1px solid #f1d38a"></i>Vence em 30 dias</span>
+    <span>* Emitido/Concluído: pagamento estimado pela próxima medição (dia 25) após a conclusão do documento</span></div>
+  <div class="tbl-wrap tall">
+    <div class="tbl-title"><h3>Previsão de recebimentos</h3><span class="muted">${rows.length} registros</span></div>
+    <table><thead><tr><th>Projeto</th><th>Documento</th><th>Empresa</th><th>Status</th><th class="num">Valor</th><th>Dt. Referência</th><th>Dt. Medição</th><th>Dt. NF</th><th>Dt. Pagamento</th><th>Situação</th><th></th></tr></thead><tbody>
+    ${rows.length ? rows.map(x => `<tr class="${x.d.received ? 'recv' : x.ps.k === 'late' ? 'late' : x.ps.k === 'soon' ? 'soon' : ''}">
+      <td class="t">${esc(x.s.project_number)}</td><td><div class="nowrap">${esc(x.d.doc_number)}</div>${x.d.note ? `<div class="ob">${esc(x.d.note)}</div>` : ''}</td><td>${esc(x.s.company_name)}</td><td>${badge(x.d.status)}</td>
+      <td class="num"><b>${brl(x.value)}</b></td><td class="nowrap">${fmtD(x.ref)} ${x.refEst ? '<span class="s">(conclusão)</span>' : ''}</td><td class="nowrap">${fmtD(x.d.measurement_date)}</td><td class="nowrap">${fmtD(x.d.invoice_date)}</td>
+      <td class="nowrap"><b style="color:${x.ps.k === 'late' ? 'var(--bad)' : x.ps.k === 'soon' ? 'var(--warn)' : 'inherit'}">${fmtD(x.pay)}</b> ${x.est ? '<span class="s">(estimada)</span>' : ''}</td>
+      <td><span class="badge plain pay-${x.ps.k}">${esc(x.ps.l)}</span></td>
+      <td>${x.d.status === 'medido_faturado' ? `<button class="link" data-recv="${x.s.id}|${x.d.id}">${x.d.received ? 'Desfazer' : 'Marcar recebido'}</button>` : `<button class="link" data-measure="${x.s.id}|${x.d.id}">Medir</button>`}</td></tr>`).join('')
+      : '<tr><td colspan="11" class="empty">Nenhum registro</td></tr>'}
+    </tbody></table></div>`;
+};
+function bindRecebimentos(m) {
+  const R = ui.rec;
+  m.querySelectorAll('[data-recst]').forEach(c => c.onchange = () => { c.checked ? R.statuses.add(c.dataset.recst) : R.statuses.delete(c.dataset.recst); render(); });
+  const df = m.querySelector('#rc-df'); if (df) df.onchange = () => { R.dateField = df.value; render(); };
+  m.querySelectorAll('#rc-from,#rc-to').forEach(el => el.onchange = () => { R[el.id === 'rc-from' ? 'from' : 'to'] = el.value; render(); });
+}
+function exportRecPdf() {
+  const { rows, k } = recData();
+  pdfDoc({
+    title: 'Relatório de Recebimentos', filename: `recebimentos_${stamp()}.pdf`, summary: `${rows.length} registros | Ciclo: medição dia 25, NF dia 5, pagamento dia 10 do mês subsequente`,
+    kpis: [['Total', brl(k.total)], ['A Receber', brl(k.aReceber)], ['Medido/Faturado', brl(k.medido)], ['Emitido (estimado)', brl(k.emitido)], ['Atrasado', brl(k.atrasado)]],
+    head: ['Projeto', 'Documento', 'Observação', 'Empresa', 'Status', 'Valor', 'Dt. Referência', 'Dt. Medição', 'Dt. NF', 'Dt. Pagamento', 'Situação'],
+    body: rows.map(x => [x.s.project_number, x.d.doc_number, x.d.note, x.s.company_name, statusLabel(x.d.status), brl(x.value), fmtD(x.ref), fmtD(x.d.measurement_date), fmtD(x.d.invoice_date), fmtD(x.pay) + (x.est ? ' (est.)' : ''), x.ps.l]),
+    colStyles: { 1: { cellWidth: 50 }, 5: { halign: 'right' } },
+    rowStyle: d => { if (d.section !== 'body') return; const x = rows[d.row.index]; if (!x || x.d.received) return; if (x.ps.k === 'late') d.cell.styles.fillColor = [253, 232, 236]; else if (x.ps.k === 'soon') d.cell.styles.fillColor = [255, 244, 220]; },
+  });
+}
+function exportRecXlsx() {
+  if (!needXLSX()) return;
+  const { rows } = recData();
+  const data = rows.map(x => ({ 'Projeto': x.s.project_number, 'Documento': x.d.doc_number, 'Observação': x.d.note, 'Empresa': x.s.company_name, 'Status': statusLabel(x.d.status), 'Valor (R$)': x.value,
+    'Dt. Referência': fmtD(x.ref), 'Dt. Medição': fmtD(x.d.measurement_date), 'Dt. NF': fmtD(x.d.invoice_date), 'Dt. Pagamento': fmtD(x.pay), 'Estimada': x.est ? 'Sim' : 'Não', 'Situação': x.ps.l, 'Recebido em': fmtD(x.d.received_date) }));
+  const wb = XLSX.utils.book_new(), ws = XLSX.utils.json_to_sheet(data);
+  if (data.length) ws['!cols'] = Object.keys(data[0]).map(k => ({ wch: k === 'Documento' ? 42 : 16 }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Recebimentos'); XLSX.writeFile(wb, `recebimentos_${stamp()}.xlsx`);
+}
+
+/* ============================ Financeiro ============================ */
+function finData() {
+  const today = todayIso(), F = ui.fin;
+  const act = allDocs().filter(x => x.d.status !== 'cancelado');
+  const pays = act.filter(x => x.d.status === 'medido_faturado').map(x => ({ ...x, pay: paymentInfo(x.s, x.d).date })).filter(x => x.pay).sort((a, b) => a.pay.localeCompare(b.pay));
+  const sum = arr => arr.reduce((a, x) => a + x.value, 0);
+  const med = act.filter(x => x.d.status === 'medido_faturado');
+  const k = {
+    receita: sum(act), medido: sum(med), aReceber: sum(med.filter(x => !x.d.received)), recebido: sum(med.filter(x => x.d.received)),
+    pendente: sum(pays.filter(x => !x.d.received && x.pay >= today)), atrasado: sum(pays.filter(x => !x.d.received && x.pay < today)),
+  };
+  let list = pays;
+  if (F.period === 'range12') { const t = new Date(); const s0 = iso(t.getFullYear(), t.getMonth() - 6, 1), e0 = iso(t.getFullYear(), t.getMonth() + 7, 0); list = list.filter(x => x.pay >= s0 && x.pay <= e0); }
+  else if (F.period !== 'all') list = list.filter(x => x.pay <= addDaysIso(today, F.period));
+  if (F.month !== 'all') list = list.filter(x => x.pay.slice(0, 7) === F.month);
+  const months = {}; pays.forEach(x => { const m = x.pay.slice(0, 7); months[m] = months[m] || { m, rec: 0, pend: 0 }; months[m][x.d.received ? 'rec' : 'pend'] += x.value; });
+  return { k, list, pays, months: Object.values(months).sort((a, b) => a.m.localeCompare(b.m)) };
+}
+VIEWS.financeiro = function () {
+  const F = ui.fin, { k, list, pays, months } = finData(), today = todayIso();
+  const max = Math.max(...months.map(m => m.rec + m.pend), 1);
+  const short = v => v >= 1000 ? (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'k' : Math.round(v);
+  const monthOpts = [...new Set(pays.map(x => x.pay.slice(0, 7)))].sort();
+  const mt = list.reduce((a, x) => a + x.value, 0);
+  return `
+  <div class="head"><div><h2>Financeiro</h2><div class="desc">Controle de recebimentos e fluxo de caixa</div></div>
+    <div class="btns"><button class="btn xls" data-act="fin-xlsx">⬇ Exportar Excel</button><button class="btn pdf" data-act="fin-pdf">📄 Exportar PDF</button></div></div>
+  <div class="grid kpis">
+    <div class="card kpi"><div class="lbl">💲 Receita total</div><div class="val">${brl(k.receita)}</div><div class="note">documentos não cancelados</div></div>
+    <div class="card kpi"><div class="lbl">📈 Medido/Faturado</div><div class="val">${brl(k.medido)}</div></div>
+    <div class="card kpi"><div class="lbl">💳 A receber</div><div class="val">${brl(k.aReceber)}</div></div>
+    <div class="card kpi"><div class="lbl">✅ Recebido</div><div class="val">${brl(k.recebido)}</div></div>
+    <div class="card kpi"><div class="lbl">🕒 Pendente</div><div class="val">${brl(k.pendente)}</div><div class="note">no prazo</div></div>
+    <div class="card kpi red"><div class="lbl">⚠ Atrasado</div><div class="val">${brl(k.atrasado)}</div><div class="note">pagamento vencido</div></div>
+  </div>
+  <div class="card" style="margin-bottom:14px"><h3>Fluxo de caixa previsto por mês</h3>
+    ${months.length ? `<div class="legend"><span><i style="background:var(--series-1)"></i>A receber</span><span><i style="background:var(--series-2)"></i>Recebido</span></div>
+    <div class="vchart">${months.map(m => `<div class="col" title="${monthLabel(m.m)} — A receber: ${brl(m.pend)} · Recebido: ${brl(m.rec)}">
+      <div class="v">${short(m.rec + m.pend)}</div><div class="stack">
+      ${m.rec ? `<div class="seg" style="height:${m.rec / max * 180}px;background:var(--series-2)"></div>` : ''}
+      ${m.pend ? `<div class="seg" style="height:${m.pend / max * 180}px;background:var(--series-1)${m.m < today.slice(0, 7) ? ';opacity:.55' : ''}"></div>` : ''}</div></div>`).join('')}</div>
+    <div class="vlabels">${months.map(m => `<span style="${m.m === today.slice(0, 7) ? 'font-weight:700;color:var(--ink)' : ''}">${monthLabel(m.m)}</span>`).join('')}</div>` : '<div class="empty">Nenhum documento medido com data de pagamento</div>'}
+  </div>
+  <div class="tbl-wrap">
+    <div class="tbl-title" style="flex-wrap:wrap;gap:8px"><h3>Calendário de pagamentos</h3>
+      <div class="filters" style="margin:0"><span class="muted">Mês:</span><select id="fin-month"><option value="all">Todos os meses</option>${monthOpts.map(m => `<option value="${m}" ${F.month === m ? 'selected' : ''}>${monthLabel(m)}</option>`).join('')}</select>
+      ${[[30, '30 dias'], [60, '60 dias'], [90, '90 dias'], ['range12', '12 meses'], ['all', 'Todos']].map(([v, l]) => `<button class="chip ${F.period === v ? 'on' : ''}" data-fper="${v}">${l}</button>`).join('')}
+      <button class="chip" style="color:var(--bad)" data-act="fin-clear">Limpar filtros</button></div></div>
+    <div style="padding:8px 16px;font-size:13px" class="muted">${list.length} pagamento(s) · total <b style="color:var(--ink)">${brl(mt)}</b> · recebido ${brl(list.filter(x => x.d.received).reduce((a, x) => a + x.value, 0))}</div>
+    <table><thead><tr><th>Projeto</th><th>Empresa</th><th>Documento</th><th class="num">Valor</th><th>Dt. Medição</th><th>Dt. NF</th><th>Dt. Pagamento</th><th>Status</th><th>Ação</th></tr></thead><tbody>
+    ${list.length ? list.map(x => { const ps = payState(x.d, x.pay); return `<tr class="${x.d.received ? 'recv' : ''}"><td class="t">${esc(x.s.project_number)}</td><td>${esc(x.s.company_name)}</td>
+      <td><div class="nowrap">${esc(x.d.doc_number)}</div>${x.d.note ? `<div class="ob">${esc(x.d.note)}</div>` : ''}</td><td class="num"><b>${brl(x.value)}</b></td>
+      <td class="nowrap">${fmtD(x.d.measurement_date)}</td><td class="nowrap">${fmtD(x.d.invoice_date)}</td><td class="nowrap">${fmtD(x.pay)}</td>
+      <td><span class="badge plain pay-${ps.k}">${ps.k === 'soon' ? 'Pendente' : esc(ps.l)}</span>${x.d.received && x.d.received_date ? `<div class="s">em ${fmtD(x.d.received_date)}</div>` : ''}</td>
+      <td><button class="link" data-recv="${x.s.id}|${x.d.id}">${x.d.received ? 'Desfazer' : 'Marcar recebido'}</button></td></tr>`; }).join('')
+      : '<tr><td colspan="9" class="empty">Nenhum pagamento no período</td></tr>'}
+    </tbody></table></div>`;
+};
+function bindFinanceiro(m) {
+  const F = ui.fin;
+  const fm = m.querySelector('#fin-month'); if (fm) fm.onchange = () => { F.month = fm.value; if (fm.value !== 'all') F.period = 'all'; render(); };
+  m.querySelectorAll('[data-fper]').forEach(b => b.onclick = () => { const v = b.dataset.fper; F.period = isNaN(+v) ? v : +v; render(); });
+}
+function exportFinPdf() {
+  const { k, list } = finData();
+  pdfDoc({
+    title: 'Financeiro — Calendário de Pagamentos', filename: `financeiro_${stamp()}.pdf`, summary: `${list.length} pagamentos | Total ${brl(list.reduce((a, x) => a + x.value, 0))}`,
+    kpis: [['Receita Total', brl(k.receita)], ['Medido/Faturado', brl(k.medido)], ['A Receber', brl(k.aReceber)], ['Recebido', brl(k.recebido)], ['Pendente', brl(k.pendente)], ['Atrasado', brl(k.atrasado)]],
+    head: ['Projeto', 'Empresa', 'Documento', 'Observação', 'Valor', 'Dt. Medição', 'Dt. NF', 'Dt. Pagamento', 'Status', 'Recebido em'],
+    body: list.map(x => [x.s.project_number, x.s.company_name, x.d.doc_number, x.d.note, brl(x.value), fmtD(x.d.measurement_date), fmtD(x.d.invoice_date), fmtD(x.pay), payState(x.d, x.pay).l, fmtD(x.d.received_date)]),
+    colStyles: { 2: { cellWidth: 55 }, 4: { halign: 'right' } },
+    rowStyle: d => { if (d.section !== 'body') return; const x = list[d.row.index]; if (x && !x.d.received && payState(x.d, x.pay).k === 'late') d.cell.styles.fillColor = [253, 232, 236]; },
+  });
+}
+function exportFinXlsx() {
+  if (!needXLSX()) return;
+  const { list, months } = finData();
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(list.map(x => ({ 'Projeto': x.s.project_number, 'Empresa': x.s.company_name, 'Documento': x.d.doc_number, 'Observação': x.d.note, 'Valor (R$)': x.value,
+    'Dt. Medição': fmtD(x.d.measurement_date), 'Dt. NF': fmtD(x.d.invoice_date), 'Dt. Pagamento': fmtD(x.pay), 'Status': payState(x.d, x.pay).l, 'Recebido em': fmtD(x.d.received_date) }))), 'Pagamentos');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(months.map(m => ({ 'Mês': monthLabel(m.m), 'A receber (R$)': m.pend, 'Recebido (R$)': m.rec, 'Total (R$)': m.pend + m.rec }))), 'Fluxo mensal');
+  XLSX.writeFile(wb, `financeiro_${stamp()}.xlsx`);
+}
+function toggleReceived(key) {
+  const { s, d } = findDoc(key);
+  if (!d.received) {
+    const dt = prompt('Data do recebimento (dd/mm/aaaa):', fmtD(todayIso()));
+    if (dt === null) return;
+    const mm = dt.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    d.received = true; d.received_date = mm ? `${mm[3]}-${pad(mm[2])}-${pad(mm[1])}` : todayIso();
+  } else { d.received = false; d.received_date = ''; }
+  touch(s); save(); render();
+}
+
+/* ============================ Backup ============================ */
+VIEWS.backup = function () {
+  let prev = null; try { prev = localStorage.getItem(PREV_KEY); } catch (e) { /* storage indisponível */ }
+  const docs = state.services.reduce((a, s) => a + s.documents.length, 0);
+  return `
+  <div class="head"><h2>Backup</h2></div>
+  <div class="card" style="margin-bottom:14px">Base atual: <b>${state.companies.length}</b> empresas · <b>${state.services.length}</b> serviços · <b>${docs}</b> documentos. Os dados ficam salvos neste navegador — faça backups regulares.</div>
+  <div class="grid backup-grid">
+    <div class="card"><h3>Exportar</h3><p>O backup contém tudo: empresas (valores de HH/A1), serviços, documentos com status, observação, medição, NF, pagamento, recebimento, priorização do mapa de carga, etapas e observações.</p>
+      <div class="btns"><button class="btn primary" data-act="exp-json">⬇ Backup JSON</button><button class="btn primary" data-act="exp-xlsx">⬇ Backup Excel</button></div></div>
+    <div class="card"><h3>Importar</h3><p>Aceita backups deste sistema (JSON/Excel) e da versão anterior do MGR Projetos (backup_mgr_*.json / .xlsx). A importação <b>substitui</b> os dados atuais — uma cópia de segurança é guardada para desfazer.</p>
+      <div class="btns"><button class="btn" data-act="imp-json">⬆ Importar JSON</button><button class="btn" data-act="imp-xlsx">⬆ Importar Excel</button>
+      ${prev ? '<button class="btn" data-act="undo-import">↶ Desfazer última importação</button>' : ''}</div>
+      <input type="file" id="file-json" accept=".json,application/json" hidden><input type="file" id="file-xlsx" accept=".xlsx,.xls" hidden></div>
+    <div class="card"><h3>Zona de perigo</h3><p>Apaga todos os dados do sistema (é feita uma cópia para desfazer).</p><button class="btn danger" data-act="wipe">Apagar todos os dados</button></div>
+  </div>
+  <div class="tbl-wrap" style="margin-top:14px">
+    <div class="tbl-title" style="flex-wrap:wrap;gap:8px"><div><h3>Backups automáticos (semanais)</h3><div class="muted" style="font-size:12px;margin-top:3px">Salvo toda segunda às 07:00 e enviado por e-mail (JSON + Excel) aos usuários cadastrados às 07:10 · últimas 26 semanas</div></div>
+      ${sync.online ? '<button class="btn" data-act="send-backup-email">✉ Enviar backup por e-mail agora</button>' : ''}</div>
+    <div id="auto-backups"><div class="empty">${sync.online ? 'Carregando…' : 'Disponível após entrar no sistema online.'}</div></div>
+  </div>`;
+};
+/** Dispara a função online que envia o backup (JSON + Excel) aos usuários cadastrados. */
+async function sendBackupEmail(btn) {
+  if (!sync.online) return;
+  if (!confirm('Enviar agora o backup completo (JSON + Excel) por e-mail para todos os usuários cadastrados?')) return;
+  if (sync.dirty || sync.busy) await pushState();
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  try {
+    const { data, error } = await sb.functions.invoke('weekly-backup-email', { body: { origem: 'manual' } });
+    let res = data;
+    if (error) { try { res = await error.context.json(); } catch { res = { error: error.message }; } }
+    if (res?.results) alert(res.results.map(r => `${r.to}: ${r.ok ? 'enviado ✔' : 'ERRO — ' + r.error}`).join('\n'));
+    else alert('Erro: ' + (res?.error || 'falha no envio'));
+  } catch (e) { alert('Erro: ' + e.message); }
+  btn.disabled = false; btn.textContent = '✉ Enviar backup por e-mail agora';
+}
+let autoBackups = null;
+async function loadAutoBackups() {
+  const box = document.getElementById('auto-backups');
+  if (!box || !sync.online) return;
+  const { data, error } = await sb.from('app_backups').select('id,created_at,kind,version').order('id', { ascending: false });
+  if (error) { box.innerHTML = `<div class="empty">Erro: ${esc(error.message)}</div>`; return; }
+  autoBackups = data;
+  box.innerHTML = data.length ? `<table><thead><tr><th>Data</th><th>Tipo</th><th class="num">Versão</th><th></th></tr></thead><tbody>${data.map(b => `<tr>
+    <td>${new Date(b.created_at).toLocaleString('pt-BR')}</td><td>${esc(b.kind)}</td><td class="num">${b.version}</td>
+    <td><div class="actions"><button class="btn sm" data-abdl="${b.id}">⬇ JSON</button><button class="btn sm" data-abrestore="${b.id}">↶ Restaurar</button></div></td></tr>`).join('')}</tbody></table>`
+    : '<div class="empty">Nenhum backup automático ainda — o primeiro será gerado na próxima segunda-feira.</div>';
+  const fetchOne = async id => { const r = await sb.from('app_backups').select('created_at,data').eq('id', id).single(); if (r.error) throw r.error; return r.data; };
+  box.querySelectorAll('[data-abdl]').forEach(b => b.onclick = async () => {
+    try { const d = await fetchOne(b.dataset.abdl); download(new Blob([JSON.stringify({ ...d.data, timestamp: d.created_at, app: APP_NAME }, null, 2)], { type: 'application/json' }), `backup_semanal_${d.created_at.slice(0, 10)}.json`); }
+    catch (e) { alert('Erro: ' + e.message); }
+  });
+  box.querySelectorAll('[data-abrestore]').forEach(b => b.onclick = async () => {
+    try { const d = await fetchOne(b.dataset.abrestore); const ns = normalizeState(d.data); if (confirmReplace(ns)) replaceState(ns, 'Backup automático restaurado'); }
+    catch (e) { alert('Erro: ' + e.message); }
+  });
+}
+function stamp() { const t = new Date(); return `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}_${pad(t.getHours())}${pad(t.getMinutes())}`; }
+function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+function buildBackup() {
+  const act = allDocs().filter(x => x.d.status !== 'cancelado');
+  return {
+    timestamp: new Date().toISOString(), version: '4.0', app: APP_NAME,
+    companies: state.companies, services: state.services.map(s => ({ ...s, status: serviceStatus(s), total_value: serviceValue(s) })),
+    stats: {
+      total_companies: state.companies.length, total_services: state.services.length, total_documents: allDocs().length,
+      total_value: act.reduce((a, x) => a + x.value, 0), measured_value: act.filter(x => x.d.status === 'medido_faturado').reduce((a, x) => a + x.value, 0),
+    },
+  };
+}
+function exportJson() { download(new Blob([JSON.stringify(buildBackup(), null, 2)], { type: 'application/json' }), `backup_servicos_externos_${stamp()}.json`); }
+function needXLSX() { if (typeof XLSX === 'undefined') { alert('Biblioteca de Excel não carregou (sem internet?). Use o backup JSON.'); return false; } return true; }
+function exportXlsx() {
+  if (!needXLSX()) return;
+  const wb = XLSX.utils.book_new();
+  const servRows = state.services.map(s => ({
+    'ID': s.id, 'Nº Projeto': s.project_number, 'Disciplina': s.discipline, 'Nota/OS/SERD': s.parent_project, 'Título': s.title, 'Empresa ID': s.company_id, 'Empresa': s.company_name,
+    'Status (resumo)': statusLabel(serviceStatus(s)), 'Dt. Início': s.start_date, 'Dt. Fim Prevista': s.completion_date, 'Dt. Conclusão': s.concluded_date,
+    'Avanço (%)': s.progress_percentage, 'Qtd Total': serviceQty(s), 'Valor Total (R$)': serviceValue(s), 'Observações': s.notes, 'Etapas (JSON)': JSON.stringify(s.stages),
+    'Criado em': s.created_date, 'Atualizado em': s.updated_date,
+  }));
+  const docRows = state.services.flatMap(s => s.documents.map(d => ({
+    'Serviço ID': s.id, 'Doc ID': d.id, 'Nº Projeto': s.project_number, 'Empresa': s.company_name, 'Nº Documento': d.doc_number, 'Observação': d.note,
+    'Tipo': typeInfo(d.type).l, 'Tipo (código)': d.type, 'Quantidade': d.quantity, 'Valor Unit. (R$)': unitValue(companyOf(s), d.type), 'Valor (R$)': docValue(s, d),
+    'Status': statusLabel(d.status), 'Status (código)': d.status, 'Dt. Conclusão Doc.': d.completion_date, 'Dt. Medição': d.measurement_date, 'Dt. NF': d.invoice_date, 'Dt. Pagamento': d.payment_date,
+    'Recebido': d.received ? 'Sim' : 'Não', 'Dt. Recebimento': d.received_date, 'Início Exec.': d.exec_start, 'Fim Exec.': d.exec_end, 'Prioridade': d.priority ?? '', 'Substatus': d.substatus,
+  })));
+  const compRows = state.companies.map(c => ({ 'ID': c.id, 'Nome': c.name, 'A1 Básico (R$)': c.a1_basico_value, 'A1 Detalhado (R$)': c.a1_detalhado_value, 'HH Eng. (R$)': c.hh_eng_value, 'HH Proj. (R$)': c.hh_projetista_value, 'Ativa': c.active ? 'Sim' : 'Não', 'Criado em': c.created_date, 'Atualizado em': c.updated_date }));
+  const ws = (rows, widths) => { const w = XLSX.utils.json_to_sheet(rows); if (rows.length) w['!cols'] = Object.keys(rows[0]).map(k => ({ wch: widths?.[k] || Math.max(12, k.length + 2) })); return w; };
+  XLSX.utils.book_append_sheet(wb, ws(compRows, { 'Nome': 34 }), 'Empresas');
+  XLSX.utils.book_append_sheet(wb, ws(state.disciplines.map(d => ({ 'Código': d.code, 'Descrição': d.name })), { 'Descrição': 30 }), 'Disciplinas');
+  XLSX.utils.book_append_sheet(wb, ws(servRows, { 'Título': 50, 'Empresa': 26, 'Observações': 30 }), 'Servicos');
+  XLSX.utils.book_append_sheet(wb, ws(docRows, { 'Nº Documento': 44, 'Empresa': 26, 'Observação': 30 }), 'Documentos');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{ 'Gerado em': new Date().toLocaleString('pt-BR'), 'Versão': '4.0', 'Sistema': APP_NAME }]), 'Info');
+  XLSX.writeFile(wb, `backup_servicos_externos_${stamp()}.xlsx`);
+}
+function replaceState(newState, label) {
+  try { localStorage.setItem(PREV_KEY, JSON.stringify(state)); } catch (e) { console.error(e); }
+  state = newState; save(); render();
+  toast(`${label}: ${state.companies.length} empresas, ${state.services.length} serviços`);
+}
+function confirmReplace(ns) {
+  const nd = ns.services.reduce((a, s) => a + s.documents.length, 0);
+  return confirm(`Importar ${ns.companies.length} empresas, ${ns.services.length} serviços e ${nd} documentos?\n\nOs dados atuais (${state.companies.length} empresas, ${state.services.length} serviços) serão SUBSTITUÍDOS. Você poderá desfazer depois.`);
+}
+function importJsonText(text) {
+  const d = JSON.parse(text);
+  if (!Array.isArray(d.companies) || !Array.isArray(d.services)) throw new Error('Arquivo não reconhecido: faltam "companies" e "services".');
+  const ns = normalizeState(d);
+  if (confirmReplace(ns)) replaceState(ns, 'Backup importado');
+}
+const cellDate = v => {
+  if (v == null || v === '') return '';
+  if (v instanceof Date) return iso(v.getFullYear(), v.getMonth(), v.getDate());
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+  if (typeof v === 'number') { const dt = new Date(Math.round((v - 25569) * 86400000)); return dt.toISOString().slice(0, 10); }
+  return '';
+};
+const parseStatus = v => { if (STATUS.some(s => s.v === v)) return v; const n = norm(v); const hit = STATUS.find(s => norm(s.l) === n) || STATUS.find(s => n && norm(s.l).startsWith(n.split(/[\s/]/)[0])); return hit ? hit.v : 'planejado'; };
+const parseType = v => { if (DOC_TYPES.some(t => t.v === v)) return v; const n = norm(v);
+  if (n.includes('a1') && n.includes('det')) return 'A1_DETALHADO'; if (n.includes('a1')) return 'A1_BASICO';
+  if (n.includes('proj')) return 'HH_PROJ'; return 'HH_ENG'; };
+const yes = v => !/^(nao|false|0|n)$/i.test(norm(v));
+function importXlsxBuffer(buf) {
+  const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+  const sheet = name => { const k = wb.SheetNames.find(n => norm(n) === norm(name)); return k ? XLSX.utils.sheet_to_json(wb.Sheets[k], { defval: '' }) : null; };
+  const g = (r, ...keys) => { for (const k of keys) { const hit = Object.keys(r).find(x => norm(x) === norm(k)); if (hit !== undefined && r[hit] !== '') return r[hit]; } return ''; };
+  const compRows = sheet('Empresas') || [];
+  const companies = compRows.map(r => normalizeCompany({
+    id: String(g(r, 'ID') || '') || undefined, name: g(r, 'Nome'), active: yes(g(r, 'Ativa', 'Ativo') || 'Sim'),
+    a1_basico_value: g(r, 'A1 Básico (R$)', 'Taxa A1 Básico (R$/prancha)'), a1_detalhado_value: g(r, 'A1 Detalhado (R$)', 'Taxa A1 Detalhado (R$/prancha)'),
+    hh_eng_value: g(r, 'HH Eng. (R$)', 'Taxa HH Eng. (R$/h)'), hh_projetista_value: g(r, 'HH Proj. (R$)', 'Taxa HH Proj. (R$/h)'),
+    created_date: g(r, 'Criado em') || undefined, updated_date: g(r, 'Atualizado em') || undefined,
+  })).filter(c => c.name);
+  let services = [];
+  const servRows = sheet('Servicos'), docRows = sheet('Documentos');
+  if (servRows && docRows && servRows.length && 'ID' in servRows[0]) {
+    services = servRows.map(r => {
+      let stages; try { stages = JSON.parse(g(r, 'Etapas (JSON)') || 'null'); } catch { stages = null; }
+      const id = String(g(r, 'ID'));
+      const legacyStatus = g(r, 'Status (código)') || parseStatus(g(r, 'Status (resumo)', 'Status'));
+      return {
+        id, project_number: String(g(r, 'Nº Projeto')), discipline: String(g(r, 'Disciplina')).toUpperCase(), parent_project: String(g(r, 'Nota/OS/SERD')), title: String(g(r, 'Título')),
+        company_id: String(g(r, 'Empresa ID')), company_name: String(g(r, 'Empresa')), status: legacyStatus,
+        start_date: cellDate(g(r, 'Dt. Início')), completion_date: cellDate(g(r, 'Dt. Fim Prevista')), concluded_date: cellDate(g(r, 'Dt. Conclusão')),
+        measurement_date: cellDate(g(r, 'Dt. Medição')), invoice_date: cellDate(g(r, 'Dt. NF')), payment_date: cellDate(g(r, 'Dt. Pagamento')),
+        progress_percentage: g(r, 'Avanço (%)'), notes: String(g(r, 'Observações')), stages,
+        created_date: g(r, 'Criado em') || undefined, updated_date: g(r, 'Atualizado em') || undefined,
+        documents: docRows.filter(d => String(g(d, 'Serviço ID')) === id).map(d => ({
+          id: String(g(d, 'Doc ID')) || undefined, doc_number: String(g(d, 'Nº Documento')), note: String(g(d, 'Observação')), type: g(d, 'Tipo (código)') || parseType(g(d, 'Tipo')),
+          quantity: g(d, 'Quantidade'), status: g(d, 'Status (código)') ? g(d, 'Status (código)') : (g(d, 'Status') ? parseStatus(g(d, 'Status')) : undefined),
+          completion_date: cellDate(g(d, 'Dt. Conclusão Doc.')), measurement_date: cellDate(g(d, 'Dt. Medição')), invoice_date: cellDate(g(d, 'Dt. NF')), payment_date: cellDate(g(d, 'Dt. Pagamento')),
+          measured: norm(g(d, 'Medido')) === 'sim', received: norm(g(d, 'Recebido')) === 'sim', received_date: cellDate(g(d, 'Dt. Recebimento')),
+          exec_start: cellDate(g(d, 'Início Exec.')), exec_end: cellDate(g(d, 'Fim Exec.')), priority: g(d, 'Prioridade') === '' ? null : g(d, 'Prioridade'), substatus: String(g(d, 'Substatus')),
+        })),
+      };
+    });
+  } else {
+    // formato da versão anterior do MGR Projetos: uma linha por documento na aba "Serviços"
+    const legacy = sheet('Serviços') || sheet('Servicos') || [];
+    const groups = new Map();
+    legacy.forEach(r => {
+      const key = [g(r, 'Nº Projeto'), g(r, 'Título'), g(r, 'Empresa')].map(norm).join('|');
+      if (!groups.has(key)) groups.set(key, {
+        project_number: String(g(r, 'Nº Projeto')), title: String(g(r, 'Título')), company_name: String(g(r, 'Empresa')),
+        start_date: cellDate(g(r, 'Dt. Início')), progress_percentage: g(r, 'Progresso (%)'), notes: String(g(r, 'Observações')), documents: [],
+      });
+      const meas = cellDate(g(r, 'Dt. Medição'));
+      groups.get(key).documents.push({ doc_number: String(g(r, 'Nº Documento')), type: parseType(g(r, 'Tipo Documento')), quantity: g(r, 'Quantidade'), status: parseStatus(g(r, 'Status')),
+        completion_date: cellDate(g(r, 'Dt. Conclusão Doc.')), measurement_date: meas, payment_date: cellDate(g(r, 'Dt. Pagamento')) });
+    });
+    services = [...groups.values()];
+  }
+  if (!companies.length && !services.length) throw new Error('Nenhuma aba "Empresas"/"Servicos" reconhecida no arquivo.');
+  const disciplines = (sheet('Disciplinas') || []).map(r => ({ code: g(r, 'Código'), name: g(r, 'Descrição') }));
+  const ns = normalizeState({ companies, services, disciplines });
+  if (confirmReplace(ns)) replaceState(ns, 'Excel importado');
+}
+
+/* ============================ Bind geral ============================ */
+function bindView() {
+  const m = document.getElementById('main');
+  m.querySelectorAll('[data-act]').forEach(b => b.onclick = e => {
+    e.preventDefault();
+    const a = b.dataset.act;
+    if (a === 'new-service') { if (!state.companies.length) { alert('Cadastre uma empresa primeiro.'); ui.tab = 'empresas'; return render(); } openService(); }
+    if (a === 'go-novalue') { ui.tab = 'servicos'; ui.status.clear(); ui.noValue = true; render(); }
+    if (a === 'colmenu') { ui.colMenu = !ui.colMenu; render(); }
+    if (a === 'cols-all') { SERVICE_COLS.forEach(c => ui.cols[c.k] = true); saveUi(); render(); }
+    if (a === 'cols-def') { SERVICE_COLS.forEach(c => ui.cols[c.k] = c.on); saveUi(); render(); }
+    if (a === 'expand-all') { if (ui.expanded.size) ui.expanded.clear(); else filteredServices().forEach(s => ui.expanded.add(s.id)); render(); }
+    if (a === 'new-company') openCompany();
+    if (a === 'new-disc') { if (addDiscipline()) render(); }
+    if (a === 'exp-json') exportJson();
+    if (a === 'exp-xlsx') exportXlsx();
+    if (a === 'imp-json') m.querySelector('#file-json').click();
+    if (a === 'imp-xlsx') { if (needXLSX()) m.querySelector('#file-xlsx').click(); }
+    if (a === 'undo-import') { if (confirm('Restaurar os dados de antes da última importação/limpeza?')) { const p = localStorage.getItem(PREV_KEY); state = normalizeState(JSON.parse(p)); localStorage.removeItem(PREV_KEY); save(); render(); toast('Dados restaurados'); } }
+    if (a === 'send-backup-email') sendBackupEmail(b);
+    if (a === 'wipe') { if (confirm('Apagar TODOS os dados?') && confirm('Tem certeza? Faça um backup antes.')) replaceState(emptyState(), 'Dados apagados'); }
+    if (a === 'rep-pdf') exportReportPdf();
+    if (a === 'rep-xlsx') exportReportXlsx();
+    if (a === 'rep-json') { const { rows, kpis } = reportData(); download(new Blob([JSON.stringify({ gerado_em: new Date().toISOString(), filtros: reportFilterText(), kpis, documentos: rows.map(x => ({ projeto: x.s.project_number, titulo: x.s.title, empresa: x.s.company_name, ...x.d, valor: x.value })) }, null, 2)], { type: 'application/json' }), `relatorio_${stamp()}.json`); }
+    if (a === 'r-cleardate') { ui.rep.from = ui.rep.to = ''; render(); }
+    if (a === 'rec-pdf') exportRecPdf();
+    if (a === 'rec-xlsx') exportRecXlsx();
+    if (a === 'fin-pdf') exportFinPdf();
+    if (a === 'fin-xlsx') exportFinXlsx();
+    if (a === 'fin-clear') { ui.fin = { month: 'all', period: 'all' }; render(); }
+    if (a === 'mapa-pdf') exportMapaPdf();
+    if (a === 'mapa-clear') { Object.assign(ui.mapa, { search: '', from: '', to: '', statuses: new Set(), types: new Set() }); render(); }
+    if (a === 'prio-all') { let p = Math.max(0, ...allDocs().map(x => x.d.priority || 0)); mapaDocs().filter(x => x.d.priority == null).forEach(x => { x.d.priority = ++p; touch(x.s); }); save(); render(); }
+  });
+  m.querySelectorAll('[data-col]').forEach(c => c.onchange = () => { ui.cols[c.dataset.col] = c.checked; saveUi(); render(); });
+  m.querySelectorAll('[data-chip]').forEach(b => b.onclick = () => {
+    const c = b.dataset.chip;
+    if (c === 'all') { ui.status.clear(); ui.noValue = false; }
+    else if (c === 'novalue') ui.noValue = !ui.noValue;
+    else ui.status.has(c) ? ui.status.delete(c) : ui.status.add(c);
+    render();
+  });
+  const fs = m.querySelector('#f-search');
+  if (fs) fs.oninput = () => { ui.search = fs.value; const pos = fs.selectionStart; render(); const n = document.getElementById('f-search'); n.focus(); n.setSelectionRange(pos, pos); };
+  const fc = m.querySelector('#f-company'); if (fc) fc.onchange = () => { ui.company = fc.value; render(); };
+  m.querySelectorAll('[data-toggle]').forEach(b => b.onclick = () => { const id = b.dataset.toggle; ui.expanded.has(id) ? ui.expanded.delete(id) : ui.expanded.add(id); render(); });
+  m.querySelectorAll('[data-edit]').forEach(b => b.onclick = e => { e.preventDefault(); openService(b.dataset.edit); });
+  m.querySelectorAll('[data-dup]').forEach(b => b.onclick = () => openService(b.dataset.dup, true));
+  m.querySelectorAll('[data-dstatus]').forEach(el => el.onchange = () => { const { s, d } = findDoc(el.dataset.dstatus); setDocStatus(s, d, el.value); });
+  m.querySelectorAll('[data-dadv]').forEach(b => b.onclick = () => { const { s, d } = findDoc(b.dataset.dadv); setDocStatus(s, d, FLOW[FLOW.indexOf(d.status) + 1]); });
+  m.querySelectorAll('[data-measure]').forEach(b => b.onclick = () => { const { s, d } = findDoc(b.dataset.measure); setDocStatus(s, d, 'medido_faturado'); });
+  m.querySelectorAll('[data-measall]').forEach(b => b.onclick = () => {
+    const s = state.services.find(x => x.id === b.dataset.measall);
+    askMeasurement(s.documents.filter(d => d.status === 'emitido_concluido').map(d => ({ s, d })), ok => { if (ok) { touch(s); save(); toast('Documentos medidos'); } render(); });
+  });
+  m.querySelectorAll('[data-recv]').forEach(b => b.onclick = () => toggleReceived(b.dataset.recv));
+  m.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+    const s = state.services.find(x => x.id === b.dataset.del);
+    if (confirm(`Excluir o serviço ${s.project_number} — ${s.title} (${s.documents.length} documentos)?`)) { state.services = state.services.filter(x => x !== s); save(); render(); }
+  });
+  m.querySelectorAll('[data-editc]').forEach(b => b.onclick = () => openCompany(b.dataset.editc));
+  m.querySelectorAll('[data-delc]').forEach(b => b.onclick = () => deleteCompany(b.dataset.delc));
+  m.querySelectorAll('[data-editdisc]').forEach(b => b.onclick = () => editDiscipline(b.dataset.editdisc));
+  m.querySelectorAll('[data-deldisc]').forEach(b => b.onclick = () => deleteDiscipline(b.dataset.deldisc));
+  const fj = m.querySelector('#file-json');
+  if (fj) fj.onchange = async () => { const f = fj.files[0]; fj.value = ''; if (!f) return; try { importJsonText(await f.text()); } catch (e) { alert('Erro ao importar: ' + e.message); } };
+  const fx = m.querySelector('#file-xlsx');
+  if (fx) fx.onchange = async () => { const f = fx.files[0]; fx.value = ''; if (!f) return; try { importXlsxBuffer(new Uint8Array(await f.arrayBuffer())); } catch (e) { alert('Erro ao importar: ' + e.message); } };
+  if (ui.tab === 'mapa') bindMapa(m);
+  if (ui.tab === 'relatorios') bindRelatorios(m);
+  if (ui.tab === 'recebimentos') bindRecebimentos(m);
+  if (ui.tab === 'financeiro') bindFinanceiro(m);
+  if (ui.tab === 'backup') loadAutoBackups().catch(console.error);
+}
+function exportMapaPdf() {
+  const docs = mapaDocs(), seq = docs.filter(x => x.d.priority != null).sort((a, b) => a.d.priority - b.d.priority), queue = docs.filter(x => x.d.priority == null);
+  const row = (x, i) => [x.d.priority ?? '—', x.s.project_number, x.d.doc_number, x.d.note, x.s.company_name, typeInfo(x.d.type).s, fmtN(x.d.quantity), brl(x.value),
+    fmtD(x.d.exec_start || x.s.start_date), fmtD(x.d.exec_end || x.s.completion_date), (SUBSTATUS.find(o => o.v === x.d.substatus) || SUBSTATUS[0]).l, statusLabel(x.d.status), nextStage(x.s)?.name || 'Concluídas'];
+  const grp = l => [{ content: l, colSpan: 13, styles: { fillColor: [232, 240, 252], fontStyle: 'bold', textColor: [29, 79, 143] } }];
+  pdfDoc({
+    title: 'Mapa de Carga', filename: `mapa_de_carga_${stamp()}.pdf`, summary: `${docs.length} documentos | ${seq.length} priorizados | ${queue.length} em fila`,
+    kpis: [['Total', docs.length], ['Priorizados', seq.length], ['Em fila', queue.length], ['HH Eng.', fmtN(docs.filter(x => x.d.type === 'HH_ENG').reduce((a, x) => a + num(x.d.quantity), 0))], ['Valor Total', brl(docs.reduce((a, x) => a + x.value, 0))]],
+    head: ['#', 'Projeto', 'Documento', 'Observação', 'Empresa', 'Tipo', 'Qtd', 'Valor', 'Início', 'Conclusão', 'Substatus', 'Status', 'Próxima etapa'],
+    body: [grp(`Sequência de execução (${seq.length})`), ...seq.map(row), grp(`Fila aguardando priorização (${queue.length})`), ...queue.map(row)],
+    colStyles: { 2: { cellWidth: 42 }, 6: { halign: 'right' }, 7: { halign: 'right' } },
+  });
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.querySelector('#modal-root .ov') && !document.querySelector('body > .ov')) closeModal(); });
+document.addEventListener('click', e => { if (ui.colMenu && !e.target.closest('.colpick')) { ui.colMenu = false; render(); } });
+
+boot();
+</script>
+</body>
+</html>
